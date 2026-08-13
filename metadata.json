@@ -1,0 +1,8 @@
+
+{
+  "name": "MIL Contábil IA",
+  "description": "Uma plataforma inteligente para cálculos contábeis, gestão de folha de pagamento e consultoria tributária assistida por IA.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

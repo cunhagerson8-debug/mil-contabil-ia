@@ -1,0 +1,274 @@
+```mermaid
+erDiagram
+    %% ============================================================
+    %% MIL Contábil IA — Entity Relationship Diagram
+    %% Multi-tenant SaaS schema (PostgreSQL)
+    %% ============================================================
+
+    FIRMS ||--o{ USERS : "emprega"
+    FIRMS ||--o{ COMPANIES : "atende"
+    FIRMS ||--o{ CLIENTS : "possui"
+    FIRMS ||--o{ TAX_OBLIGATIONS : "controla"
+    FIRMS ||--o{ INVOICES : "emite"
+    FIRMS ||--o{ ALERTS : "recebe"
+    FIRMS ||--o| SUBSCRIPTIONS : "assina"
+    FIRMS ||--o{ PLATFORM_INVOICES : "fatura"
+    FIRMS ||--o{ USAGE_COUNTERS : "consome"
+    FIRMS ||--o{ AUDIT_LOGS : "gera"
+
+    USERS ||--o{ USER_COMPANY_ACCESS : "acessa"
+    USERS ||--o{ REFRESH_TOKENS : "autentica"
+    USERS ||--o{ CLIENT_HISTORY_ENTRIES : "registra"
+    USERS ||--o{ CLIENT_DOCUMENTS : "envia"
+    USERS ||--o{ PORTAL_MESSAGES : "escreve"
+    USERS ||--o{ AUDIT_LOGS : "executa_acao"
+    USERS }o--|| COMPANIES : "e_contador_de"
+
+    COMPANIES ||--o{ COMPANY_PARTNERS : "tem_socios"
+    COMPANIES ||--o{ DIGITAL_CERTIFICATES : "possui"
+    COMPANIES ||--o{ USER_COMPANY_ACCESS : "concede_acesso"
+    COMPANIES |o--o{ CLIENTS : "vincula_opcional"
+    COMPANIES ||--o{ TAX_OBLIGATIONS : "deve"
+    COMPANIES ||--o{ INVOICES : "emite_para_si"
+    COMPANIES |o--o{ ALERTS : "gera_alertas"
+
+    CLIENTS ||--o{ CLIENT_CONTACTS : "tem"
+    CLIENTS ||--o{ CLIENT_DOCUMENTS : "possui"
+    CLIENTS ||--o{ CLIENT_HISTORY_ENTRIES : "acumula"
+    CLIENTS ||--o{ PORTAL_DOCUMENTS : "recebe"
+    CLIENTS ||--o{ PORTAL_GUIDES : "recebe"
+    CLIENTS ||--o{ PORTAL_MESSAGES : "troca"
+
+    TAX_OBLIGATIONS |o--o{ ALERTS : "origina"
+    TAX_OBLIGATIONS |o--o{ PORTAL_GUIDES : "gera_guia"
+
+    INVOICES ||--o{ INVOICE_ITEMS : "contem"
+    INVOICES |o--o{ ALERTS : "origina"
+
+    DIGITAL_CERTIFICATES |o--o{ ALERTS : "origina"
+
+    PORTAL_MESSAGES |o--o| PORTAL_MESSAGES : "responde"
+
+    PLANS ||--o{ SUBSCRIPTIONS : "assinado_como"
+    SUBSCRIPTIONS ||--o{ PLATFORM_INVOICES : "gera_fatura"
+
+    %% ============================================================
+    %% Definições de entidade (campos principais)
+    %% ============================================================
+
+    FIRMS {
+        uuid id PK
+        text name
+        text cnpj UK
+        firm_status status
+        citext email
+        timestamptz trial_ends_at
+    }
+
+    USERS {
+        uuid id PK
+        uuid firm_id FK "NULL para platform_admin"
+        user_role role
+        user_status status
+        citext email
+        text password_hash
+        boolean mfa_enabled
+    }
+
+    USER_COMPANY_ACCESS {
+        uuid id PK
+        uuid user_id FK
+        uuid company_id FK
+        boolean can_manage
+    }
+
+    REFRESH_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        text token_hash UK
+        timestamptz expires_at
+    }
+
+    COMPANIES {
+        uuid id PK
+        uuid firm_id FK
+        text razao_social
+        text nome_fantasia
+        text cnpj
+        regime_tributario regime
+        status_empresa status
+        uuid contador_responsavel_id FK
+    }
+
+    COMPANY_PARTNERS {
+        uuid id PK
+        uuid company_id FK
+        text nome
+        text cpf
+        numeric participacao
+    }
+
+    DIGITAL_CERTIFICATES {
+        uuid id PK
+        uuid company_id FK
+        text vault_reference "ref. externa, NUNCA o .pfx"
+        date valid_from
+        date valid_until
+        timestamptz revoked_at
+    }
+
+    CLIENTS {
+        uuid id PK
+        uuid firm_id FK
+        uuid company_id FK "opcional"
+        text nome
+        tipo_cliente tipo
+        text documento
+        status_cliente status
+        text[] servicos_contratados
+    }
+
+    CLIENT_CONTACTS {
+        uuid id PK
+        uuid client_id FK
+        text nome
+        citext email
+        boolean principal
+    }
+
+    CLIENT_DOCUMENTS {
+        uuid id PK
+        uuid client_id FK
+        text nome
+        tipo_documento_cliente tipo
+        text storage_key
+        date validade
+        uuid uploaded_by FK
+    }
+
+    CLIENT_HISTORY_ENTRIES {
+        uuid id PK
+        uuid client_id FK
+        tipo_historico_cliente tipo
+        text descricao
+        uuid responsavel_id FK
+    }
+
+    TAX_OBLIGATIONS {
+        uuid id PK
+        uuid firm_id FK
+        uuid company_id FK
+        text nome
+        obligation_type type
+        obligation_status status
+        date vencimento
+        numeric valor
+        text integration_ref
+        obligation_integration_source integration_source
+    }
+
+    INVOICES {
+        uuid id PK
+        uuid firm_id FK
+        uuid company_id FK
+        text numero
+        invoice_type tipo
+        invoice_status status
+        text tomador
+        numeric valor_total
+        text chave_acesso
+    }
+
+    INVOICE_ITEMS {
+        uuid id PK
+        uuid invoice_id FK
+        text descricao
+        numeric quantidade
+        numeric valor_unitario
+        numeric valor_total
+    }
+
+    ALERTS {
+        uuid id PK
+        uuid firm_id FK
+        uuid company_id FK "NULL = alerta de sistema"
+        text title
+        alert_severity severity
+        alert_category category
+        boolean read
+        uuid source_obligation_id FK
+        uuid source_invoice_id FK
+        uuid source_certificate_id FK
+    }
+
+    PORTAL_DOCUMENTS {
+        uuid id PK
+        uuid client_id FK
+        text nome
+        portal_document_category categoria
+        text storage_key
+        date validade
+    }
+
+    PORTAL_GUIDES {
+        uuid id PK
+        uuid client_id FK
+        uuid tax_obligation_id FK "opcional"
+        portal_guide_type tipo
+        numeric valor
+        date vencimento
+        boolean pago
+    }
+
+    PORTAL_MESSAGES {
+        uuid id PK
+        uuid client_id FK
+        portal_message_sender remetente
+        uuid sender_user_id FK
+        portal_message_status status
+        uuid resposta_id FK "auto-referência"
+    }
+
+    PLANS {
+        uuid id PK
+        text code UK
+        numeric price_amount
+        billing_interval billing_interval
+        jsonb features
+    }
+
+    SUBSCRIPTIONS {
+        uuid id PK
+        uuid firm_id FK
+        uuid plan_id FK
+        subscription_status status
+        timestamptz current_period_end
+    }
+
+    PLATFORM_INVOICES {
+        uuid id PK
+        uuid firm_id FK
+        uuid subscription_id FK
+        invoice_payment_status status
+        numeric amount_due
+        date due_date
+    }
+
+    USAGE_COUNTERS {
+        uuid id PK
+        uuid firm_id FK
+        date period_month
+        integer invoices_issued
+    }
+
+    AUDIT_LOGS {
+        uuid id PK
+        uuid firm_id FK "nullable"
+        uuid actor_user_id FK "nullable"
+        audit_action action
+        text entity_table
+        uuid entity_id
+        jsonb old_values
+        jsonb new_values
+    }
+```

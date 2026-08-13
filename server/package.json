@@ -1,0 +1,33 @@
+{
+  "name": "mil-contabil-ia-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "API REST do MIL Contábil IA — Express + PostgreSQL, Repository + Service layers.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "migrate": "node scripts/run-migrations.mjs"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.23.8",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "helmet": "^7.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/pg": "^8.11.6",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/cors": "^2.8.17",
+    "@types/node": "^22.14.0",
+    "typescript": "~5.8.2",
+    "tsx": "^4.16.2"
+  }
+}

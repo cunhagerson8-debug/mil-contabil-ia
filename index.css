@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans;
+  }
+
+  * {
+    @apply border-slate-200;
+  }
+}
+
+@layer utilities {
+  .animate-in {
+    animation: animateIn 0.4s ease-out forwards;
+  }
+
+  @keyframes animateIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .fade-in {
+    animation-name: fadeIn;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
