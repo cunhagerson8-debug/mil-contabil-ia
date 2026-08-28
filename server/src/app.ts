@@ -15,6 +15,7 @@ import { alertsRouter } from "./routes/alerts.routes.js";
 import { portalRouter } from "./routes/portal.routes.js";
 import { usersRouter } from "./routes/users.routes.js";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export function createApp(): Application {
   const app = express();
@@ -36,7 +37,7 @@ export function createApp(): Application {
   app.use("/api/portal", portalRouter);
   app.use("/api/users", usersRouter);
 
-  const frontendDist = path.resolve(process.cwd(), "..", "dist");
+  const frontendDist = fileURLToPath(new URL("../../dist", import.meta.url));
 
 app.use(express.static(frontendDist));
 
