@@ -10,7 +10,7 @@
 //     precisam deixar propagar.
 // =============================================================================
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:4000";
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL ?? window.location.origin;
 
 export class ApiError extends Error {
   status: number;
