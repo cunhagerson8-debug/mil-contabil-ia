@@ -14,6 +14,7 @@ import { invoicesRouter } from "./routes/invoices.routes.js";
 import { alertsRouter } from "./routes/alerts.routes.js";
 import { portalRouter } from "./routes/portal.routes.js";
 import { usersRouter } from "./routes/users.routes.js";
+import path from "node:path";
 
 export function createApp(): Application {
   const app = express();
@@ -34,6 +35,18 @@ export function createApp(): Application {
   app.use("/api/alerts", alertsRouter);
   app.use("/api/portal", portalRouter);
   app.use("/api/users", usersRouter);
+
+  const frontendDist = path.resolve(process.cwd(), "..", "dist");
+
+app.use(express.static(frontendDist));
+
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) {
+    return next();
+  }
+
+  res.sendFile(path.join(frontendDist, "index.html"));
+});
 
   // 404 para rotas não mapeadas
   app.use((req: Request, res: Response) => {
