@@ -19,13 +19,21 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";    -- busca textual (nome, razão soci
 -- Plataforma / Tenancy / Auth
 -- -----------------------------------------------------------------------------
 
-CREATE TYPE user_role AS ENUM (
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_type WHERE typname = 'user_role'
+  ) THEN
+    CREATE TYPE user_role AS ENUM (
   'platform_admin',         -- equipe MIL Gestão & Tecnologia — acesso global
   'firm_owner',              -- dono/sócio do escritório contábil (tenant admin)
   'accountant',              -- contador do escritório, acesso operacional
   'company_manager',         -- responsável da empresa-cliente (portal, gestão da própria empresa)
   'company_user'             -- usuário operacional da empresa-cliente (portal, leitura/limitado)
 );
+
+  END IF;
+END $$;
 
 CREATE TYPE firm_status AS ENUM ('active', 'trial', 'suspended', 'cancelled');
 CREATE TYPE user_status AS ENUM ('active', 'invited', 'suspended', 'deactivated');
