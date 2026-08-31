@@ -35,7 +35,17 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   if (status === 500) {
     // eslint-disable-next-line no-console
-    console.error(`[erro não tratado] ${req.method} ${req.path}:`, error);
+    if (error instanceof Error) {
+  console.error(
+    `[erro não tratado] ${req.method} ${req.path}: ${error.message}`
+  );
+  console.error(error.stack);
+} else {
+  console.error(
+    `[erro não tratado] ${req.method} ${req.path}:`,
+    String(error)
+  );
+}
   }
 
   res.status(status).json({

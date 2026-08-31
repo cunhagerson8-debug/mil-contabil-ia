@@ -9,11 +9,13 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { companiesRouter } from "./routes/companies.routes.js";
 import { clientsRouter } from "./routes/clients.routes.js";
-import { taxObligationsRouter } from "./routes/taxObligations.routes.js";
 import { invoicesRouter } from "./routes/invoices.routes.js";
 import { alertsRouter } from "./routes/alerts.routes.js";
 import { portalRouter } from "./routes/portal.routes.js";
 import { usersRouter } from "./routes/users.routes.js";
+import firmsRouter from "./routes/firms.routes.js";
+import { taxObligationsRoutes } from "./routes/tax-obligations.routes.js";
+import { milAuditorRoutes } from "./routes/mil-auditor.routes.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,12 +32,14 @@ export function createApp(): Application {
 
   app.use("/api/auth", authRouter);
   app.use("/api/companies", companiesRouter);
-  app.use("/api/clients", clientsRouter);
-  app.use("/api/tax-obligations", taxObligationsRouter);
+  app.use("/api/clients", clientsRouter);  
   app.use("/api/invoices", invoicesRouter);
   app.use("/api/alerts", alertsRouter);
   app.use("/api/portal", portalRouter);
   app.use("/api/users", usersRouter);
+  app.use("/api/firms", firmsRouter);
+  app.use("/api/tax-obligations", taxObligationsRoutes);
+  app.use("/api/auditor", milAuditorRoutes);
 
   const frontendDist = fileURLToPath(new URL("../../dist", import.meta.url));
 
