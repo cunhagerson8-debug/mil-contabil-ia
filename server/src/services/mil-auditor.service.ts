@@ -290,7 +290,7 @@ export class MilAuditorService {
       },
       {
         name: "Gestão de RH",
-        table: "employees",
+        table: "hr_employees",
         repository: backendFileExists("repositories/employee.repository.ts"),
         service: backendFileExists("services/employee.service.ts"),
         controller: backendFileExists("controllers/employee.controller.ts"),
