@@ -10,6 +10,9 @@ import {
   Route,
   Boxes,
 } from "lucide-react";
+import AuditFindingCard, {
+  AuditFinding,
+} from "./components/AuditFindingCard";
 
 type AuditStatus = "ok" | "warning" | "error";
 type ModuleStatus = "operational" | "incomplete";
@@ -36,6 +39,36 @@ interface AuditReport {
   overallStatus: AuditStatus;
   checks: AuditCheck[];
 }
+
+const initialFindings: AuditFinding[] = [
+  {
+    id: "fiscal-001",
+    module: "Fiscal / Obrigações",
+    title: "Obrigações próximas do vencimento",
+    description:
+      "O MIL Auditor identificará obrigações fiscais que exigem atenção antes do vencimento.",
+    severity: "warning",
+    action: "human",
+  },
+  {
+    id: "rh-001",
+    module: "Gestão de RH",
+    title: "Validação preventiva da folha",
+    description:
+      "O Auditor verificará inconsistências e pendências antes do fechamento da folha de pagamento.",
+    severity: "normal",
+    action: "none",
+  },
+  {
+    id: "sistema-001",
+    module: "MIL Contábil IA",
+    title: "Estrutura técnica operacional",
+    description:
+      "Banco, repositories, services, controllers e APIs essenciais estão sendo monitorados.",
+    severity: "normal",
+    action: "none",
+  },
+];
 
 function getSessionToken(): string | null {
   try {
@@ -322,7 +355,25 @@ export default function MilAuditor() {
           </div>
         )}
       </div>
+<div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+  <div className="mb-4">
+    <h2 className="font-bold text-slate-900">
+      Auditoria Operacional
+    </h2>
+    <p className="mt-1 text-sm text-slate-500">
+      Situações que exigem atenção, decisão humana ou acompanhamento preventivo.
+    </p>
+  </div>
 
+  <div className="space-y-3">
+    {initialFindings.map((finding) => (
+      <AuditFindingCard
+        key={finding.id}
+        finding={finding}
+      />
+    ))}
+  </div>
+</div>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <Database className="text-blue-600" size={20} />
