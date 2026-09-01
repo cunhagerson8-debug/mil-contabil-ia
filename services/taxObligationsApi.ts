@@ -20,10 +20,10 @@ export type TaxObligationUpdateInput = Partial<TaxObligationCreateInput> & { sta
 
 export const taxObligationsApi = {
   async list(filters: { companyId?: string; status?: string } = {}): Promise<TaxObligation[]> {
-    const { obligations } = await apiRequest<{ obligations: TaxObligation[] }>("/api/tax-obligations", { query: filters });
-    return obligations;
-  },
-
+  return apiRequest<TaxObligation[]>("/api/tax-obligations", {
+    query: filters,
+  });
+},
   async getById(id: string): Promise<TaxObligation> {
     const { obligation } = await apiRequest<{ obligation: TaxObligation }>(`/api/tax-obligations/${id}`);
     return obligation;
