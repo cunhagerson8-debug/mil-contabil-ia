@@ -44,6 +44,7 @@ export const SECTION_ACCESS: Record<AppSection, UserRole[]> = {
   [AppSection.NEWS]:                ["platform_admin", "firm_owner", "accountant", "company_manager", "company_user"],
   [AppSection.AI_CHAT]:             ["platform_admin", "firm_owner", "accountant", "company_manager", "company_user"],
   [AppSection.ABERTURA_EMPRESA]:    ["platform_admin","firm_owner","accountant",],
+  [AppSection.MIL_AUDITOR]: ["platform_admin"],
 };
 
 export function canAccessSection(role: UserRole, section: AppSection): boolean {
@@ -72,6 +73,7 @@ export const SECTION_LABELS: Record<AppSection, string> = {
   [AppSection.NEWS]:                "Notícias Contábeis",
   [AppSection.AI_CHAT]:             "MIL IA Contábil",
   [AppSection.ABERTURA_EMPRESA]: "Abertura de Empresa",
+  [AppSection.MIL_AUDITOR]:         "MIL Auditor",
 };
 
 

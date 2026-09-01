@@ -24,6 +24,7 @@ export enum AppSection {
   NEWS = "NEWS",
   AI_CHAT = "AI_CHAT",
   ABERTURA_EMPRESA = "ABERTURA_EMPRESA",
+  MIL_AUDITOR = "MIL_AUDITOR",
 }
 
 // -----------------------------------------------------------------------------
