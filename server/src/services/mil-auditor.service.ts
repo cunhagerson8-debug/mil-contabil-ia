@@ -30,6 +30,8 @@ const EXPECTED_MIGRATIONS = [
   "010_audit_log.sql",
   "011_row_level_security.sql",
   "012_seed_roles_and_plans.sql",
+  "013_tax_obligations_deleted_at.sql",
+  "014_tax_obligations_new_schema.sql",
 ];
 
 const ESSENTIAL_TABLES = [
