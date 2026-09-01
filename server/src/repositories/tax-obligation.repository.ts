@@ -79,7 +79,7 @@ export class TaxObligationRepository {
         )
         VALUES (
           $1, $2, $3, $4, $5, $6,
-          COALESCE($7, 'pending'),
+          COALESCE($7, 'em_dia'),
           $8, $9, $10, $11, $12, $13
         )
         RETURNING *
