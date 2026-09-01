@@ -49,7 +49,10 @@ const ESSENTIAL_TABLES = [
 ];
 
 function backendFileExists(relativePath: string): boolean {
-  return existsSync(resolve(process.cwd(), "src", relativePath));
+  const localPath = resolve(process.cwd(), "src", relativePath);
+  const productionPath = resolve(process.cwd(), "server", "src", relativePath);
+
+  return existsSync(localPath) || existsSync(productionPath);
 }
 
 export class MilAuditorService {
