@@ -15,6 +15,7 @@ import { portalRouter } from "./routes/portal.routes.js";
 import { usersRouter } from "./routes/users.routes.js";
 import firmsRouter from "./routes/firms.routes.js";
 import { taxObligationsRoutes } from "./routes/tax-obligations.routes.js";
+import { employeesRouter } from "./routes/employees.routes.js";
 import { milAuditorRoutes } from "./routes/mil-auditor.routes.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +40,7 @@ export function createApp(): Application {
   app.use("/api/users", usersRouter);
   app.use("/api/firms", firmsRouter);
   app.use("/api/tax-obligations", taxObligationsRoutes);
+  app.use("/api/employees", employeesRouter);
   app.use("/api/auditor", milAuditorRoutes);
 
   const frontendDist = fileURLToPath(new URL("../../dist", import.meta.url));
