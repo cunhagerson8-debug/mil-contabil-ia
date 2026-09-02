@@ -4,8 +4,10 @@
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 import { closePool } from "./db/pool.js";
+import { startObligationStatusJob } from "./jobs/obligation-status.job.js";
 
 const app = createApp();
+startObligationStatusJob();
 
 const server = app.listen(env.port, () => {
   // eslint-disable-next-line no-console
