@@ -49,25 +49,7 @@ const initialFindings: AuditFinding[] = [
       "O MIL Auditor identificará obrigações fiscais que exigem atenção antes do vencimento.",
     severity: "warning",
     action: "human",
-  },
-  {
-    id: "rh-001",
-    module: "Gestão de RH",
-    title: "Validação preventiva da folha",
-    description:
-      "O Auditor verificará inconsistências e pendências antes do fechamento da folha de pagamento.",
-    severity: "normal",
-    action: "none",
-  },
-  {
-    id: "sistema-001",
-    module: "MIL Contábil IA",
-    title: "Estrutura técnica operacional",
-    description:
-      "Banco, repositories, services, controllers e APIs essenciais estão sendo monitorados.",
-    severity: "normal",
-    action: "none",
-  },
+  },  
 ];
 
 function getSessionToken(): string | null {
@@ -173,6 +155,32 @@ export default function MilAuditor() {
   const incompleteCount = modules.filter(
     (item) => item.status === "incomplete"
   ).length;
+
+  const automationCheck = report?.checks.find(
+  (check) => check.name === "Automação Fiscal"
+);
+
+const operationalFindings: AuditFinding[] = [
+  ...initialFindings,
+  {
+    id: "automacao-fiscal",
+    module: "Fiscal / Obrigações",
+    title: "Automação Fiscal",
+    description:
+      automationCheck?.message ??
+      "Verificando a configuração da automação fiscal.",
+    severity:
+      automationCheck?.status === "ok"
+        ? "normal"
+        : automationCheck?.status === "error"
+          ? "critical"
+          : "warning",
+    action:
+      automationCheck?.status === "ok"
+        ? "none"
+        : "human",
+  },
+];
 
   return (
     <div className="space-y-6">
@@ -366,7 +374,7 @@ export default function MilAuditor() {
   </div>
 
   <div className="space-y-3">
-    {initialFindings.map((finding) => (
+    {operationalFindings.map((finding) => (
       <AuditFindingCard
         key={finding.id}
         finding={finding}
