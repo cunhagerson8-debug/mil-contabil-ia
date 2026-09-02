@@ -154,7 +154,6 @@ const fiscalCheck = report?.checks.find(
 );
 
 const operationalFindings: AuditFinding[] = [
-  ...initialFindings,
   {
   id: "situacao-fiscal",
   module: "Fiscal / Obrigações",

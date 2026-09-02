@@ -16,27 +16,21 @@ export function generateCertificatePDF(company: Company) {
   pdf.text(`CNPJ: ${company.cnpj}`, 20, 65);
 
   pdf.text(
-    `Tipo: ${company.certificadoDigitalTipo || "-"}`,
+    `Tipo: ${company.certificadoDigitalValidade ? "Certificado digital" : "-"}`,
     20,
     80
   );
 
   pdf.text(
-    `Autoridade: ${company.certificadoAutoridade || "-"}`,
+    `Responsável: ${company.contadorResponsavel || company.responsavel || "-"}`,
     20,
     90
   );
 
   pdf.text(
-    `Responsável: ${company.certificadoResponsavel || "-"}`,
-    20,
-    100
-  );
-
-  pdf.text(
     `Validade: ${company.certificadoDigitalValidade || "-"}`,
     20,
-    110
+    100
   );
 
   pdf.save("CertificadoDigital.pdf");

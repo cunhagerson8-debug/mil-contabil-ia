@@ -2,7 +2,6 @@
 import React from 'react';
 import './index.css';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -39,12 +38,15 @@ window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
 });
 
 const root = ReactDOM.createRoot(rootElement);
-try {
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-} catch (err) {
-  renderErrorToDOM(err);
-}
+
+// Load the application after error handlers are installed so module evaluation
+// failures cannot leave the root silently empty.
+import('./App')
+  .then(({ default: App }) => {
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+  })
+  .catch(renderErrorToDOM);
