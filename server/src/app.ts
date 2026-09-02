@@ -18,6 +18,7 @@ import { taxObligationsRoutes } from "./routes/tax-obligations.routes.js";
 import { employeesRouter } from "./routes/employees.routes.js";
 import { milAuditorRoutes } from "./routes/mil-auditor.routes.js";
 import { subscriptionsRouter } from "./routes/subscriptions.routes.js";
+import { aiChatRouter } from "./routes/ai-chat.routes.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,6 +45,7 @@ export function createApp(): Application {
   app.use("/api/employees", employeesRouter);
   app.use("/api/auditor", milAuditorRoutes);
   app.use("/api/subscriptions", subscriptionsRouter);
+  app.use("/api/ai", aiChatRouter);
   const frontendDist = fileURLToPath(new URL("../../dist", import.meta.url));
 
 app.use(express.static(frontendDist));
