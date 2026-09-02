@@ -40,17 +40,6 @@ interface AuditReport {
   checks: AuditCheck[];
 }
 
-const initialFindings: AuditFinding[] = [
-  {
-    id: "fiscal-001",
-    module: "Fiscal / Obrigações",
-    title: "Obrigações próximas do vencimento",
-    description:
-      "O MIL Auditor identificará obrigações fiscais que exigem atenção antes do vencimento.",
-    severity: "warning",
-    action: "human",
-  },  
-];
 
 function getSessionToken(): string | null {
   try {
