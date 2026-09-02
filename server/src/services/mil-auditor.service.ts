@@ -354,6 +354,18 @@ export class MilAuditorService {
       });
     }
 
+    checks.push({
+  name: "Automação Fiscal",
+  status: backendFileExists("jobs/obligation-status.job.ts") ? "ok" : "warning",
+  message: backendFileExists("jobs/obligation-status.job.ts")
+    ? "Job diário de atualização das obrigações fiscais está configurado."
+    : "Job diário de atualização das obrigações fiscais não foi encontrado.",
+  details: {
+    jobFile: "jobs/obligation-status.job.ts",
+    configured: backendFileExists("jobs/obligation-status.job.ts"),
+  },
+});
+
     return this.buildReport(checks);
   }
 
