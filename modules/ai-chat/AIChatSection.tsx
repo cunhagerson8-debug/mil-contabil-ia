@@ -1,24 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Sparkles, Loader2 } from "lucide-react";
+import { apiRequest } from "../../services/apiClient";
 
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
 }
-
-const SYSTEM_PROMPT = `Você é o Assistente MIL IA, um especialista em contabilidade brasileira, legislação tributária, fiscal e trabalhista. Você pertence à plataforma MIL Contábil IA, uma solução da MIL Gestão & Tecnologia.
-
-Suas áreas de expertise:
-- Simples Nacional, Lucro Presumido e Lucro Real
-- Obrigações acessórias (SPED, EFD, ECF, DCTF, DIRF)
-- Legislação trabalhista e previdenciária (CLT, eSocial, FGTS Digital)
-- Planejamento tributário
-- Abertura e encerramento de empresas
-- Emissão de notas fiscais
-- Folha de pagamento e encargos
-
-Responda sempre em português brasileiro, de forma clara e objetiva. Quando possível, cite a base legal (lei, artigo, instrução normativa). Se não tiver certeza sobre algo, informe ao usuário.`;
 
 const SUGGESTIONS = [
   "Qual o limite de faturamento do MEI em 2024?",
@@ -49,35 +37,20 @@ export default function AIChatSection() {
     setError(null);
 
     try {
-      const apiKey = (typeof process !== "undefined" && (process as any).env?.GEMINI_API_KEY) || "";
-      if (!apiKey) {
-        throw new Error("API_KEY_MISSING");
-      }
-
-      const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey });
-
       const history = messages.map((m) => ({
-        role: m.role === "user" ? "user" as const : "model" as const,
-        parts: [{ text: m.content }],
+        role: m.role,
+        content: m.content,
       }));
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: [
-          { role: "user", parts: [{ text: SYSTEM_PROMPT }] },
-          { role: "model", parts: [{ text: "Entendido. Sou o Assistente MIL IA, pronto para ajudar com questões contábeis, fiscais e trabalhistas." }] },
-          ...history,
-          { role: "user", parts: [{ text: messageText }] },
-        ],
+      const response = await apiRequest<{ response: string }>("/api/ai/chat", {
+        method: "POST",
+        body: { message: messageText, history },
       });
 
-      const assistantText = response.text || "Desculpe, não consegui gerar uma resposta.";
+      const assistantText = response.response || "Desculpe, não consegui gerar uma resposta.";
       setMessages((prev) => [...prev, { role: "assistant", content: assistantText, timestamp: new Date() }]);
     } catch (err: any) {
-      const errorMsg = err.message === "API_KEY_MISSING"
-        ? "Chave da API Gemini não configurada. Configure GEMINI_API_KEY no arquivo .env"
-        : "Erro ao conectar com a IA. Verifique sua conexão e tente novamente.";
+      const errorMsg = err?.message || "Erro ao conectar com a IA. Verifique sua conexão e tente novamente.";
       setError(errorMsg);
       setMessages((prev) => [...prev, { role: "assistant", content: errorMsg, timestamp: new Date() }]);
     } finally {
