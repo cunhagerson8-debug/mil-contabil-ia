@@ -1,6 +1,8 @@
 import { pool } from "../db/pool.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { taxObligationRepository } from "../repositories/tax-obligation.repository.js";
+import { TenantContext } from "../db/withTenantContext.js";
 
 export type AuditStatus = "ok" | "warning" | "error";
 
@@ -56,8 +58,40 @@ function backendFileExists(relativePath: string): boolean {
 }
 
 export class MilAuditorService {
-  async runAudit(): Promise<MilAuditReport> {
+  async runAudit(ctx: TenantContext): Promise<MilAuditReport> {
     const checks: AuditCheck[] = [];
+
+    const taxObligations = await taxObligationRepository.listByFirm(ctx);
+
+const overdueObligations = taxObligations.filter(
+  (item) => item.status === "vencida"
+);
+
+const upcomingObligations = taxObligations.filter(
+  (item) => item.status === "proxima_vencimento"
+);
+
+checks.push({
+  name: "Situação Fiscal",
+  status:
+    overdueObligations.length > 0
+      ? "error"
+      : upcomingObligations.length > 0
+        ? "warning"
+        : "ok",
+  message:
+    overdueObligations.length > 0
+      ? `${overdueObligations.length} obrigação(ões) fiscal(is) vencida(s).`
+      : upcomingObligations.length > 0
+        ? `${upcomingObligations.length} obrigação(ões) próxima(s) do vencimento.`
+        : "Nenhuma obrigação fiscal vencida ou próxima do vencimento.",
+  details: {
+    overdue: overdueObligations.length,
+    upcoming: upcomingObligations.length,
+    total: taxObligations.length,
+  },
+});
+
 
     // 1. Banco de dados
     try {

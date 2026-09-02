@@ -4,7 +4,7 @@ import { milAuditorService } from "../services/mil-auditor.service.js";
 export class MilAuditorController {
   async run(req: Request, res: Response): Promise<void> {
     try {
-      const report = await milAuditorService.runAudit();
+      const report = await milAuditorService.runAudit(req.tenantContext!);
 
       res.status(200).json(report);
     } catch (error) {

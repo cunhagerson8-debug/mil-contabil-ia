@@ -156,6 +156,10 @@ export default function MilAuditor() {
     (item) => item.status === "incomplete"
   ).length;
 
+const fiscalCheck = report?.checks.find(
+  (check) => check.name === "Situação Fiscal"
+);
+
   const automationCheck = report?.checks.find(
   (check) => check.name === "Automação Fiscal"
 );
@@ -163,23 +167,28 @@ export default function MilAuditor() {
 const operationalFindings: AuditFinding[] = [
   ...initialFindings,
   {
-    id: "automacao-fiscal",
-    module: "Fiscal / Obrigações",
-    title: "Automação Fiscal",
-    description:
-      automationCheck?.message ??
-      "Verificando a configuração da automação fiscal.",
-    severity:
-      automationCheck?.status === "ok"
-        ? "normal"
-        : automationCheck?.status === "error"
-          ? "critical"
-          : "warning",
-    action:
-      automationCheck?.status === "ok"
-        ? "none"
-        : "human",
-  },
+  id: "situacao-fiscal",
+  module: "Fiscal / Obrigações",
+  title:
+    fiscalCheck?.status === "error"
+      ? "Obrigações fiscais vencidas"
+      : fiscalCheck?.status === "warning"
+        ? "Obrigações próximas do vencimento"
+        : "Situação fiscal em dia",
+  description:
+    fiscalCheck?.message ??
+    "Verificando a situação das obrigações fiscais.",
+  severity:
+    fiscalCheck?.status === "error"
+      ? "critical"
+      : fiscalCheck?.status === "warning"
+        ? "warning"
+        : "normal",
+  action:
+    fiscalCheck?.status === "ok"
+      ? "none"
+      : "human",
+},
 ];
 
   return (
