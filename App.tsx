@@ -38,6 +38,7 @@ import CalculadoraView from "./modules/calculadoras/CalculadoraView";
 import News            from "./modules/news/News";
 import AIChatSection   from "./modules/ai-chat/AIChatSection";
 import MilAuditor from "./modules/mil-auditor/MilAuditor";
+import Escritorios from "./modules/escritorios/Escritorios";
 
 // ── Dados reais via API ─────────────────────────────────────────────────────
 // Todos os módulos (Empresas, Clientes, Obrigações, Notas Fiscais, Alertas,
@@ -89,6 +90,7 @@ function useNavItems(): NavItem[] {
     { id: AppSection.CALCULATORS,        label: SECTION_LABELS[AppSection.CALCULATORS],        icon: Calculator,      group: "legacy" },
     { id: AppSection.NEWS,               label: SECTION_LABELS[AppSection.NEWS],               icon: Newspaper,       group: "legacy" },
     { id: AppSection.MIL_AUDITOR, label: SECTION_LABELS[AppSection.MIL_AUDITOR], icon: ShieldCheck, group: "admin" },
+    { id: AppSection.ESCRITORIOS, label: SECTION_LABELS[AppSection.ESCRITORIOS], icon: Building2, group: "admin" },
   ];
 
   if (!user) return [];
@@ -891,6 +893,7 @@ function AuthenticatedShell() {
             {activeSection === AppSection.NEWS               && <PermissionGuard section={AppSection.NEWS}><News onNavigate={(s) => navigateTo(s as AppSection)} /></PermissionGuard>}
             {activeSection === AppSection.AI_CHAT            && <PermissionGuard section={AppSection.AI_CHAT}><AIChatSection /></PermissionGuard>}
             {activeSection === AppSection.MIL_AUDITOR        && <PermissionGuard section={AppSection.MIL_AUDITOR}><MilAuditor /></PermissionGuard>}
+            {activeSection === AppSection.ESCRITORIOS         && <PermissionGuard section={AppSection.ESCRITORIOS}><Escritorios /></PermissionGuard>}
           </div>
         </div>
       </main>
