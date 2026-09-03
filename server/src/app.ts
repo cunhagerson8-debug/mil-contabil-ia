@@ -19,6 +19,7 @@ import { employeesRouter } from "./routes/employees.routes.js";
 import { milAuditorRoutes } from "./routes/mil-auditor.routes.js";
 import { subscriptionsRouter } from "./routes/subscriptions.routes.js";
 import { aiChatRouter } from "./routes/ai-chat.routes.js";
+import { adminFirmsRouter } from "./routes/admin-firms.routes.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,6 +42,7 @@ export function createApp(): Application {
   app.use("/api/portal", portalRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/firms", firmsRouter);
+  app.use("/api/admin/firms", adminFirmsRouter);
   app.use("/api/tax-obligations", taxObligationsRoutes);
   app.use("/api/employees", employeesRouter);
   app.use("/api/auditor", milAuditorRoutes);

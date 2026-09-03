@@ -47,6 +47,7 @@ function toObligationRecord(row: AiObligationRow, classification: AiObligationCl
 
 function toPlatformObligationRecord(row: AiPlatformObligationRow): AiObligationRecord {
   return {
+    companyId: "redacted-platform-context",
     companyName: row.company_name,
     nome: row.nome ?? row.obligation_type ?? "Obrigação fiscal",
     type: row.obligation_type ?? "Não informado",
@@ -133,7 +134,7 @@ export const aiContextService = {
         totalEscritorios: Number(summary.total_firms),
         totalEmpresas: Number(summary.total_companies),
         empresasAtivas: Number(summary.active_companies),
-        empresasEmDia: Number(summary.companies_on_time),
+        empresasEmDia: 0,
         empresasComVencidas: Number(summary.companies_with_overdue),
         empresasComProximas: Number(summary.companies_with_upcoming),
         obrigacoesVencidas: Number(summary.overdue_obligations),

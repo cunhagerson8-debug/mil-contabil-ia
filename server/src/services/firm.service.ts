@@ -13,6 +13,9 @@ import {
   type CreateFirmInput,
   type UpdateFirmInput,
 } from "../repositories/firm.repository.js";
+import { withPlatformReadOnlyContext } from "../db/withTenantContext.js";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors.js";
+import type { CreateAdminFirmInput, UpdateAdminFirmInput } from "../validators/firm.validators.js";
 
 function normalizeCnpj(cnpj: string): string {
   return cnpj.replace(/\D/g, "");
@@ -32,7 +35,86 @@ function validateName(name: string): void {
   }
 }
 
+function assertPlatformAdmin(ctx: TenantContext): void {
+  if (ctx.role !== "platform_admin") {
+    throw new ForbiddenError("Somente o administrador da plataforma pode administrar escritórios.");
+  }
+}
+
+function normalizeAndValidateCnpj(cnpj: string): string {
+  const normalized = normalizeCnpj(cnpj);
+  validateCnpj(normalized);
+  return normalized;
+}
+
 export const firmService = {
+  async listForPlatformAdmin(ctx: TenantContext) {
+    assertPlatformAdmin(ctx);
+    return withPlatformReadOnlyContext((client) => listFirms(client));
+  },
+
+  async getForPlatformAdmin(ctx: TenantContext, firmId: string) {
+    assertPlatformAdmin(ctx);
+    return withPlatformReadOnlyContext(async (client) => {
+      const firm = await findFirmById(client, firmId);
+      if (!firm) throw new NotFoundError("Escritório", firmId);
+      return firm;
+    });
+  },
+
+  async createForPlatformAdmin(ctx: TenantContext, input: CreateAdminFirmInput) {
+    assertPlatformAdmin(ctx);
+    const cnpj = normalizeAndValidateCnpj(input.cnpj);
+    return withPlatformContext(async (client) => {
+      if (await findFirmByCnpj(client, cnpj)) {
+        throw new ConflictError(`Já existe um escritório cadastrado com o CNPJ ${cnpj}.`);
+      }
+      return createFirm(client, {
+        name: input.name,
+        trade_name: input.trade_name || null,
+        cnpj,
+        email: input.email,
+        phone: input.phone || null,
+        timezone: input.timezone,
+        status: input.status,
+      });
+    });
+  },
+
+  async updateForPlatformAdmin(ctx: TenantContext, firmId: string, input: UpdateAdminFirmInput) {
+    assertPlatformAdmin(ctx);
+    if (input.name !== undefined) validateName(input.name);
+    const normalizedCnpj = input.cnpj === undefined ? undefined : normalizeAndValidateCnpj(input.cnpj);
+    return withPlatformContext(async (client) => {
+      const current = await findFirmById(client, firmId);
+      if (!current) throw new NotFoundError("Escritório", firmId);
+      if (normalizedCnpj && normalizedCnpj !== current.cnpj && await findFirmByCnpj(client, normalizedCnpj)) {
+        throw new ConflictError(`Já existe outro escritório cadastrado com o CNPJ ${normalizedCnpj}.`);
+      }
+      return updateFirm(client, firmId, {
+        name: input.name,
+        trade_name: input.trade_name,
+        cnpj: normalizedCnpj,
+        email: input.email,
+        phone: input.phone,
+        timezone: input.timezone,
+        status: input.status,
+      });
+    });
+  },
+
+  async updateStatusForPlatformAdmin(ctx: TenantContext, firmId: string, status: string) {
+    assertPlatformAdmin(ctx);
+    if (!["active", "trial", "suspended", "cancelled"].includes(status)) {
+      throw new ValidationError("Status de escritório inválido.");
+    }
+    return withPlatformContext(async (client) => {
+      const firm = await updateFirm(client, firmId, { status });
+      if (!firm) throw new NotFoundError("Escritório", firmId);
+      return firm;
+    });
+  },
+
   async create(
   ctx: TenantContext,
   input: CreateFirmInput
