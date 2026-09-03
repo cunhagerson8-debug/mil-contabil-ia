@@ -9,7 +9,7 @@ export interface AiCompanyRecord {
 }
 
 export interface AiObligationRecord {
-  companyId: string;
+  companyId?: string;
   companyName: string;
   nome: string;
   type: string;
@@ -20,7 +20,8 @@ export interface AiObligationRecord {
 }
 
 export interface AiContextData {
-  escopo: "escritorio" | "empresa";
+  escopo: "escritorio" | "empresa" | "plataforma";
+  totalEscritorios?: number;
   totalEmpresas: number;
   empresasAtivas: number;
   empresasEmDia: number;

@@ -90,3 +90,36 @@ export async function withPlatformContext<T>(fn: (client: PoolClient) => Promise
     client.release();
   }
 }
+
+/**
+ * Contexto exclusivo para leituras globais administrativas.
+ * O chamador deve validar platform_admin antes desta função. A conexão
+ * também precisa possuir BYPASSRLS (ou ser superuser); firmId nulo nunca é
+ * tratado como autorização por este mecanismo.
+ */
+export async function withPlatformReadOnlyContext<T>(
+  fn: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN READ ONLY");
+    const roleResult = await client.query<{ rolsuper: boolean; rolbypassrls: boolean }>(`
+      SELECT rolsuper, rolbypassrls
+      FROM pg_roles
+      WHERE rolname = current_user
+    `);
+    const role = roleResult.rows[0];
+    if (!role?.rolsuper && !role?.rolbypassrls) {
+      throw new Error("A conexão administrativa da plataforma não possui BYPASSRLS.");
+    }
+
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}

@@ -75,7 +75,9 @@ export const aiChatService = {
   async chat(ctx: TenantContext, message: string, history?: AiChatMessage[]): Promise<string> {
     const currentMessage = validateMessage(message);
     const validHistory = validateHistory(history);
-    const internalContext = await aiContextService.build(ctx, currentMessage);
+    const internalContext = ctx.role === "platform_admin"
+      ? await aiContextService.buildForPlatformAdmin(ctx, currentMessage)
+      : await aiContextService.buildForTenant(ctx, currentMessage);
 
     try {
       const response = await ai.models.generateContent({

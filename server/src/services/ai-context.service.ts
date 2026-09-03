@@ -1,12 +1,12 @@
-import { withTenantContext, type TenantContext } from "../db/withTenantContext.js";
-import { aiContextRepository, AI_CONTEXT_LIMITS, type AiObligationRow } from "../repositories/ai-context.repository.js";
+import { withPlatformReadOnlyContext, withTenantContext, type TenantContext } from "../db/withTenantContext.js";
+import { aiContextRepository, AI_CONTEXT_LIMITS, type AiObligationRow, type AiPlatformObligationRow } from "../repositories/ai-context.repository.js";
 import type {
   AiCompanyRecord,
   AiContextData,
   AiObligationClassification,
   AiObligationRecord,
 } from "../types/ai-context.js";
-import { ConflictError } from "../utils/errors.js";
+import { ConflictError, ForbiddenError } from "../utils/errors.js";
 
 function classifyObligation(row: AiObligationRow, today: Date): AiObligationClassification {
   if (row.status === "nao_aplicavel") return "nao_aplicavel";
@@ -45,8 +45,20 @@ function toObligationRecord(row: AiObligationRow, classification: AiObligationCl
   };
 }
 
+function toPlatformObligationRecord(row: AiPlatformObligationRow): AiObligationRecord {
+  return {
+    companyName: row.company_name,
+    nome: row.nome ?? row.obligation_type ?? "Obrigação fiscal",
+    type: row.obligation_type ?? "Não informado",
+    competencia: row.period ?? "Não informada",
+    vencimento: row.due_date,
+    classificacao: row.classification as AiObligationClassification,
+    valor: row.amount !== null ? Number(row.amount) : undefined,
+  };
+}
+
 export const aiContextService = {
-  async build(ctx: TenantContext, message: string): Promise<AiContextData> {
+  async buildForTenant(ctx: TenantContext, message: string): Promise<AiContextData> {
     if (!ctx.firmId) {
       throw new ConflictError("A Assistente MIL IA exige um usuário vinculado a um escritório.");
     }
@@ -96,6 +108,39 @@ export const aiContextService = {
       .map(toCompanyRecord),
         obrigacoesRelevantes: relevant,
         registrosLimitados: totalEmpresas > AI_CONTEXT_LIMITS.companies || obligations.length >= AI_CONTEXT_LIMITS.obligations,
+      };
+    });
+  },
+
+  async buildForPlatformAdmin(ctx: TenantContext, _message: string): Promise<AiContextData> {
+    if (ctx.role !== "platform_admin") {
+      throw new ForbiddenError("Somente platform_admin pode consultar a visão global da plataforma.");
+    }
+
+    return withPlatformReadOnlyContext(async (client) => {
+      const isPlatformAdmin = await aiContextRepository.assertPlatformAdmin(client, ctx.userId);
+      if (!isPlatformAdmin) {
+        throw new ForbiddenError("Usuário não autorizado como platform_admin.");
+      }
+
+      const [summary, relevantObligations] = await Promise.all([
+        aiContextRepository.getPlatformSummary(client),
+        aiContextRepository.findRelevantPlatformObligations(client, AI_CONTEXT_LIMITS.platformObligations),
+      ]);
+
+      return {
+        escopo: "plataforma",
+        totalEscritorios: Number(summary.total_firms),
+        totalEmpresas: Number(summary.total_companies),
+        empresasAtivas: Number(summary.active_companies),
+        empresasEmDia: Number(summary.companies_on_time),
+        empresasComVencidas: Number(summary.companies_with_overdue),
+        empresasComProximas: Number(summary.companies_with_upcoming),
+        obrigacoesVencidas: Number(summary.overdue_obligations),
+        obrigacoesProximas: Number(summary.upcoming_obligations),
+        obrigacoesEmDia: Number(summary.on_time_obligations),
+        obrigacoesRelevantes: relevantObligations.map(toPlatformObligationRecord),
+        registrosLimitados: true,
       };
     });
   },
