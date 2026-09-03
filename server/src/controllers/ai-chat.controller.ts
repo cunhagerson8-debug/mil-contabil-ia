@@ -19,7 +19,7 @@ export const aiChatController = {
       }
 
       const input = aiChatSchema.parse(req.body);
-      const response = await aiChatService.chat(input.message, input.history);
+      const response = await aiChatService.chat(req.tenantContext, input.message, input.history);
       res.json({ response });
     } catch (error) {
       next(error);
