@@ -12,11 +12,17 @@
 //     DELETE para firm_owner, a regra de produto é "nunca exclui de
 //     verdade" — sempre soft delete, reforçada aqui).
 // =============================================================================
-import { TenantContext, withTenantContext } from "../db/withTenantContext.js";
+import { TenantContext, withTenantContext, withPlatformContext } from "../db/withTenantContext.js";
 import { companyRepository, CompanyFilters } from "../repositories/company.repository.js";
+import { findFirmById } from "../repositories/firm.repository.js";
+import { aiContextRepository } from "../repositories/ai-context.repository.js";
 import { toCompanyDto, regimeToDb, statusEmpresaToDb } from "../mappers/company.mapper.js";
 import { CompanyCreateInput, CompanyUpdateInput, CompanyDto, StatusEmpresa } from "../types/dto.js";
-import { NotFoundError, ConflictError } from "../utils/errors.js";
+import { NotFoundError, ConflictError, ForbiddenError } from "../utils/errors.js";
+
+// Situações de escritório aptas a receber novas empresas via cadastro
+// administrativo (espelha o mesmo conjunto usado em firm.service.ts).
+const FIRM_STATUSES_ACCEPTING_COMPANIES = new Set(["active", "trial"]);
 
 async function hydrate(client: any, row: Awaited<ReturnType<typeof companyRepository.findById>>): Promise<CompanyDto> {
   if (!row) throw new NotFoundError("Empresa", "?");
@@ -51,6 +57,50 @@ export const companyService = {
   },
 
   async create(ctx: TenantContext, input: CompanyCreateInput): Promise<CompanyDto> {
+    // Cadastro administrativo: platform_admin escolheu explicitamente um
+    // escritório de destino no formulário. O firmId recebido NUNCA é
+    // confiado por si só — o role é revalidado diretamente no banco (mesmo
+    // padrão de ai-context.service.ts/buildForPlatformAdmin) e o escritório
+    // é validado (existe, não excluído, em situação apta). Para qualquer
+    // usuário que não seja platform_admin, input.firmId é ignorado — o
+    // firm usado é sempre o do tenantContext autenticado.
+    if (ctx.role === "platform_admin" && input.firmId) {
+      return withPlatformContext(async (client) => {
+        const isPlatformAdmin = await aiContextRepository.assertPlatformAdmin(client, ctx.userId);
+        if (!isPlatformAdmin) {
+          throw new ForbiddenError("Usuário não autorizado como platform_admin.");
+        }
+
+        const firm = await findFirmById(client, input.firmId!);
+        if (!firm) throw new NotFoundError("Escritório", input.firmId!);
+        if (!FIRM_STATUSES_ACCEPTING_COMPANIES.has(firm.status)) {
+          throw new ConflictError("Este escritório não está em situação apropriada para receber novas empresas.");
+        }
+
+        const existing = await companyRepository.findByCnpj(client, firm.id, input.cnpj);
+        if (existing) {
+          throw new ConflictError(`Já existe uma empresa com o CNPJ ${input.cnpj} cadastrada neste escritório.`);
+        }
+
+        const created = await companyRepository.create(client, {
+          firmId: firm.id,
+          razaoSocial: input.razaoSocial,
+          nomeFantasia: input.nomeFantasia,
+          cnpj: input.cnpj,
+          cnae: input.cnae,
+          cnaeDescricao: input.cnaeDescricao,
+          regime: regimeToDb(input.regime),
+          responsavel: input.responsavel,
+          contadorResponsavelId: input.contadorResponsavelId,
+          dataAbertura: input.dataAbertura,
+          email: input.email,
+          telefone: input.telefone,
+          endereco: input.endereco,
+        });
+        return hydrate(client, created);
+      });
+    }
+
     if (!ctx.firmId) throw new ConflictError("Usuário sem escritório associado não pode cadastrar empresas.");
 
     return withTenantContext(ctx, async (client) => {

@@ -5,8 +5,10 @@ import {
 } from "lucide-react";
 import { Company, StatusEmpresa, RegimeTributario } from "./types";
 import { companiesApi, CompanyCreateInput } from "../../services/companiesApi";
+import { firmsApi, Firm } from "../../services/firmsApi";
 import { ApiError } from "../../services/apiClient";
 import CompanyDrawer from "./components/CompanyDrawer.tsx";
+import { useAuth } from "../auth/AuthContext";
 
 const statusStyles: Record<StatusEmpresa, string> = {
   Ativa: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -59,6 +61,10 @@ function CompanyFormModal({
   initial, onClose, onSaved,
 }: { initial?: Company; onClose: () => void; onSaved: () => void }) {
   const isEdit = !!initial;
+  const { user } = useAuth();
+  // platform_admin não tem firmId de sessão — precisa escolher explicitamente
+  // a qual escritório a nova empresa pertence (ver server/src/services/company.service.ts).
+  const isPlatformAdmin = user?.role === "platform_admin";
   const [form, setForm] = useState<CompanyFormState>(
     initial ? {
       razaoSocial: initial.razaoSocial, nomeFantasia: initial.nomeFantasia, cnpj: initial.cnpj,
@@ -69,6 +75,20 @@ function CompanyFormModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [firms, setFirms] = useState<Firm[]>([]);
+  const [firmsLoading, setFirmsLoading] = useState(false);
+  const [selectedFirmId, setSelectedFirmId] = useState("");
+
+  useEffect(() => {
+    if (!isPlatformAdmin || isEdit) return;
+    let cancelled = false;
+    setFirmsLoading(true);
+    firmsApi.list()
+      .then((list) => { if (!cancelled) setFirms(list); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "Não foi possível carregar os escritórios."); })
+      .finally(() => { if (!cancelled) setFirmsLoading(false); });
+    return () => { cancelled = true; };
+  }, [isPlatformAdmin, isEdit]);
 
   function update<K extends keyof CompanyFormState>(key: K, value: CompanyFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -76,6 +96,10 @@ function CompanyFormModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isPlatformAdmin && !isEdit && !selectedFirmId) {
+      setError("Selecione o escritório contábil ao qual esta empresa pertence.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -91,6 +115,7 @@ function CompanyFormModal({
         email: form.email || undefined,
         telefone: form.telefone || undefined,
         endereco: form.endereco || undefined,
+        ...(isPlatformAdmin && !isEdit ? { firmId: selectedFirmId } : {}),
       };
       if (isEdit) {
         await companiesApi.update(initial!.id, input);
@@ -126,6 +151,23 @@ function CompanyFormModal({
           )}
 
           <div className="grid grid-cols-2 gap-4">
+            {isPlatformAdmin && !isEdit && (
+              <div className="col-span-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Escritório Contábil *</label>
+                <select
+                  required
+                  value={selectedFirmId}
+                  onChange={(e) => setSelectedFirmId(e.target.value)}
+                  disabled={firmsLoading}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                >
+                  <option value="" disabled>{firmsLoading ? "Carregando escritórios..." : "Selecionar escritório"}</option>
+                  {firms.map((firm) => (
+                    <option key={firm.id} value={firm.id}>{firm.trade_name || firm.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="col-span-2">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Razão Social</label>
               <input required value={form.razaoSocial} onChange={(e) => update("razaoSocial", e.target.value)}
@@ -190,7 +232,7 @@ function CompanyFormModal({
           <button type="button" onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <button type="submit" disabled={saving || (isPlatformAdmin && !isEdit && !selectedFirmId)} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {saving && <Loader2 size={15} className="animate-spin" />}
             {isEdit ? "Salvar Alterações" : "Cadastrar Empresa"}
           </button>

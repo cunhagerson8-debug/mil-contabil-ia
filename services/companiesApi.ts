@@ -19,6 +19,10 @@ export interface CompanyCreateInput {
   email?: string;
   telefone?: string;
   endereco?: string;
+  // Contexto administrativo: escritório escolhido explicitamente por um
+  // platform_admin no formulário "Nova Empresa". Ignorado pelo backend para
+  // qualquer outro role — ver server/src/services/company.service.ts.
+  firmId?: string;
 }
 
 export type CompanyUpdateInput = Partial<CompanyCreateInput> & { status?: Company["status"] };

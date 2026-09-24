@@ -24,6 +24,11 @@ export const createCompanySchema = z.object({
   email: z.string().email().optional(),
   telefone: z.string().optional(),
   endereco: z.string().optional(),
+  // Contexto administrativo explícito: só tem efeito quando o solicitante é
+  // platform_admin (revalidado no banco em company.service.ts). Para
+  // qualquer outro role, este campo é ignorado — o firm é sempre o do
+  // tenantContext autenticado.
+  firmId: z.string().uuid().optional(),
 });
 
 export const updateCompanySchema = createCompanySchema.partial().extend({

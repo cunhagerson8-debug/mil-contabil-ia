@@ -48,6 +48,10 @@ export interface CompanyCreateInput {
   email?: string;
   telefone?: string;
   endereco?: string;
+  // Contexto administrativo: escritório escolhido explicitamente por um
+  // platform_admin. Ignorado/revalidado em company.service.ts — nunca
+  // confiar neste valor sem revalidar o role no banco.
+  firmId?: string;
 }
 
 export type CompanyUpdateInput = Partial<CompanyCreateInput> & { status?: StatusEmpresa };
