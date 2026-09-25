@@ -37,8 +37,16 @@ const TYPE_COLOR: Record<ObligationType, string> = {
 const TYPE_OPTIONS: ObligationType[] = ["DAS", "PGDAS", "DCTFWeb", "EFD-Reinf", "eSocial", "FGTS Digital", "ECD", "ECF", "Certidão", "DARF", "GRF", "GFIP"];
 const PERIODICITY_OPTIONS: ObligationPeriodicity[] = ["Mensal", "Trimestral", "Anual", "Eventual"];
 
+// Backend pode retornar a coluna `date` como "YYYY-MM-DD" puro ou, quando o
+// driver do Postgres serializa como objeto Date, como ISO completo com hora/Z
+// (ex: "2026-10-20T00:00:00.000Z"). Normaliza para a parte de data antes de
+// formatar, evitando concatenar hora sobre uma string que já tem hora.
+function toDateOnly(iso: string) {
+  return iso.slice(0, 10);
+}
+
 function fmt(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR");
+  return new Date(toDateOnly(iso) + "T12:00:00").toLocaleDateString("pt-BR");
 }
 
 function daysUntil(iso: string) {
@@ -69,7 +77,7 @@ function ObligationFormModal({
   const [form, setForm] = useState<ObligationFormState>(
     initial ? {
       companyId: initial.companyId, nome: initial.nome, type: initial.type, competencia: initial.competencia,
-      vencimento: initial.vencimento, valor: initial.valor !== undefined ? String(initial.valor) : "",
+      vencimento: toDateOnly(initial.vencimento), valor: initial.valor !== undefined ? String(initial.valor) : "",
       observacoes: initial.observacoes ?? "", periodicidade: initial.periodicidade,
     } : emptyForm(defaultCompanyId)
   );
