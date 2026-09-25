@@ -113,7 +113,7 @@ export const aiContextService = {
     });
   },
 
-  async buildForPlatformAdmin(ctx: TenantContext, _message: string): Promise<AiContextData> {
+  async buildForPlatformAdmin(ctx: TenantContext, message: string): Promise<AiContextData> {
     if (ctx.role !== "platform_admin") {
       throw new ForbiddenError("Somente platform_admin pode consultar a visão global da plataforma.");
     }
@@ -124,13 +124,37 @@ export const aiContextService = {
         throw new ForbiddenError("Usuário não autorizado como platform_admin.");
       }
 
-      const [summary, relevantObligations] = await Promise.all([
+      const normalizedMessage = message.toLocaleLowerCase("pt-BR");
+      const [summary, relevantObligations, companies] = await Promise.all([
         aiContextRepository.getPlatformSummary(client),
         aiContextRepository.findRelevantPlatformObligations(client, AI_CONTEXT_LIMITS.platformObligations),
+        aiContextRepository.findCompanies(client),
       ]);
 
+      // Quando a pergunta cita uma empresa específica, a lista de urgentes
+      // (findRelevantPlatformObligations, limitada a vencida/proxima nos
+      // próximos 15 dias) não basta: buscamos todas as obrigações daquela
+      // empresa para que status "em_dia" também cheguem ao contexto.
+      const selectedCompany = companies.find((company) =>
+        normalizedMessage.includes(company.nome_fantasia.toLocaleLowerCase("pt-BR"))
+        || normalizedMessage.includes(company.razao_social.toLocaleLowerCase("pt-BR"))
+        || normalizedMessage.includes(company.cnpj)
+      );
+
+      let obrigacoesRelevantes = relevantObligations.map(toPlatformObligationRecord);
+      if (selectedCompany) {
+        const companyObligations = await aiContextRepository.findObligations(client, selectedCompany.id);
+        const today = new Date();
+        obrigacoesRelevantes = companyObligations
+          .map((row) => ({
+            ...toObligationRecord(row, classifyObligation(row, today)),
+            companyId: "redacted-platform-context",
+          }))
+          .slice(0, AI_CONTEXT_LIMITS.relevantObligations);
+      }
+
       return {
-        escopo: "plataforma",
+        escopo: selectedCompany ? "empresa" : "plataforma",
         totalEscritorios: Number(summary.total_firms),
         totalEmpresas: Number(summary.total_companies),
         empresasAtivas: Number(summary.active_companies),
@@ -140,7 +164,8 @@ export const aiContextService = {
         obrigacoesVencidas: Number(summary.overdue_obligations),
         obrigacoesProximas: Number(summary.upcoming_obligations),
         obrigacoesEmDia: Number(summary.on_time_obligations),
-        obrigacoesRelevantes: relevantObligations.map(toPlatformObligationRecord),
+        empresaSelecionada: selectedCompany ? toCompanyRecord(selectedCompany) : undefined,
+        obrigacoesRelevantes,
         registrosLimitados: true,
       };
     });
