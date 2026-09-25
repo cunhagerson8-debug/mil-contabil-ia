@@ -43,9 +43,20 @@ export const taxObligationRepository = {
   },
 
   async create(client: PoolClient, data: TaxObligationCreateRow): Promise<TaxObligationRow> {
+    // Status é calculado a partir do vencimento no próprio INSERT: uma obrigação
+    // cadastrada com data de vencimento já passada nasce "vencida" (não "em_dia"),
+    // sem depender do job diário de recálculo para corrigir isso depois.
     const result = await client.query<TaxObligationRow>(
       `INSERT INTO tax_obligations (firm_id, company_id, nome, type, competencia, vencimento, status, valor, observacoes, periodicidade, integration_source)
-       VALUES ($1,$2,$3,$4,$5,$6,'em_dia',$7,$8,$9,$10) RETURNING *`,
+       VALUES (
+         $1,$2,$3,$4,$5,$6,
+         CASE
+           WHEN $6::date < CURRENT_DATE THEN 'vencida'
+           WHEN $6::date <= CURRENT_DATE + INTERVAL '15 days' THEN 'proxima_vencimento'
+           ELSE 'em_dia'
+         END,
+         $7,$8,$9,$10
+       ) RETURNING *`,
       [data.firmId, data.companyId, data.nome, data.type, data.competencia, data.vencimento, data.valor ?? null, data.observacoes ?? null, data.periodicidade, data.integrationSource ?? "manual"]
     );
     return result.rows[0];
@@ -55,9 +66,30 @@ export const taxObligationRepository = {
     const fields: string[] = [];
     const params: unknown[] = [];
     const fieldMap: Record<string, unknown> = { nome: data.nome, type: data.type, competencia: data.competencia, vencimento: data.vencimento, status: data.status, valor: data.valor, observacoes: data.observacoes, periodicidade: data.periodicidade, paid_at: data.paidAt };
+
+    // Se a data de vencimento mudar e nenhum status explícito for informado,
+    // recalcula o status a partir do novo vencimento (mesma regra do INSERT),
+    // em vez de manter o status anterior desatualizado.
+    const autoRecalculateStatus = data.vencimento !== undefined && data.status === undefined;
+
     for (const [column, value] of Object.entries(fieldMap)) {
+      if (column === "status" && autoRecalculateStatus) continue;
       if (value !== undefined) { params.push(value); fields.push(`${column} = $${params.length}`); }
     }
+
+    if (autoRecalculateStatus) {
+      params.push(data.vencimento);
+      const vencimentoParam = params.length;
+      fields.push(
+        `status = CASE
+           WHEN paid_at IS NOT NULL THEN 'em_dia'
+           WHEN $${vencimentoParam}::date < CURRENT_DATE THEN 'vencida'
+           WHEN $${vencimentoParam}::date <= CURRENT_DATE + INTERVAL '15 days' THEN 'proxima_vencimento'
+           ELSE 'em_dia'
+         END`
+      );
+    }
+
     if (fields.length === 0) return this.findById(client, id);
     params.push(id);
     const result = await client.query<TaxObligationRow>(`UPDATE tax_obligations SET ${fields.join(", ")} WHERE id = $${params.length} AND deleted_at IS NULL RETURNING *`, params);
