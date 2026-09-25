@@ -14,7 +14,7 @@ import { alertsRouter } from "./routes/alerts.routes.js";
 import { portalRouter } from "./routes/portal.routes.js";
 import { usersRouter } from "./routes/users.routes.js";
 import firmsRouter from "./routes/firms.routes.js";
-import { taxObligationsRoutes } from "./routes/tax-obligations.routes.js";
+import { taxObligationsRouter } from "./routes/taxObligations.routes.js";
 import { employeesRouter } from "./routes/employees.routes.js";
 import { milAuditorRoutes } from "./routes/mil-auditor.routes.js";
 import { subscriptionsRouter } from "./routes/subscriptions.routes.js";
@@ -43,7 +43,7 @@ export function createApp(): Application {
   app.use("/api/users", usersRouter);
   app.use("/api/firms", firmsRouter);
   app.use("/api/admin/firms", adminFirmsRouter);
-  app.use("/api/tax-obligations", taxObligationsRoutes);
+  app.use("/api/tax-obligations", taxObligationsRouter);
   app.use("/api/employees", employeesRouter);
   app.use("/api/auditor", milAuditorRoutes);
   app.use("/api/subscriptions", subscriptionsRouter);
