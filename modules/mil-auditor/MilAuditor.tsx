@@ -34,10 +34,43 @@ interface AuditCheck {
   details?: unknown;
 }
 
+interface ExecutivePriority {
+  companyId: string | null;
+  companyName: string | null;
+  obligationType: string;
+  obligationName: string;
+  dueDate: string | null;
+  amount?: number;
+  priority: "critica" | "alta";
+  priorityReason: string;
+  requiresHumanDecision: boolean;
+  recommendation: string;
+}
+
+interface ExecutiveSummary {
+  totalCriticalPendencies: number;
+  totalOverdueObligations: number;
+  totalUpcomingObligations: number;
+  topPriorities: ExecutivePriority[];
+  factualSummary: string;
+}
+
 interface AuditReport {
   generatedAt: string;
   overallStatus: AuditStatus;
   checks: AuditCheck[];
+  executiveSummary?: ExecutiveSummary;
+}
+
+function formatExecutiveDate(value: string | null): string {
+  if (!value) return "Não informado";
+  const date = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? "Não informado" : date.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+}
+
+function formatExecutiveAmount(value: number | undefined): string {
+  if (value === undefined) return "Valor não informado";
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
 
@@ -269,6 +302,65 @@ const operationalFindings: AuditFinding[] = [
           </div>
         </div>
       </div>
+
+      {report?.executiveSummary && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4">
+            <h2 className="font-bold text-slate-900">Resumo Executivo</h2>
+            <p className="mt-1 text-sm text-slate-600">{report.executiveSummary.factualSummary}</p>
+          </div>
+
+          <div className="mb-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-red-100 bg-red-50 p-3">
+              <p className="text-xs font-semibold text-red-700">Pendências críticas</p>
+              <p className="mt-1 text-2xl font-bold text-red-800">{report.executiveSummary.totalCriticalPendencies}</p>
+            </div>
+            <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
+              <p className="text-xs font-semibold text-rose-700">Obrigações vencidas</p>
+              <p className="mt-1 text-2xl font-bold text-rose-800">{report.executiveSummary.totalOverdueObligations}</p>
+            </div>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
+              <p className="text-xs font-semibold text-amber-700">Próximas do vencimento</p>
+              <p className="mt-1 text-2xl font-bold text-amber-800">{report.executiveSummary.totalUpcomingObligations}</p>
+            </div>
+          </div>
+
+          <h3 className="mb-3 text-sm font-bold text-slate-800">Top prioridades</h3>
+          {report.executiveSummary.topPriorities.length === 0 ? (
+            <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              Nenhuma obrigação vencida ou próxima do vencimento foi identificada.
+            </p>
+          ) : (
+            <ol className="space-y-3">
+              {report.executiveSummary.topPriorities.map((priority, index) => (
+                <li key={`${priority.companyId ?? "sem-empresa"}-${priority.obligationName}-${index}`} className="rounded-xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-900">{priority.obligationName}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {priority.companyName ?? "Empresa não identificada"} · {priority.obligationType}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${priority.priority === "critica" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>
+                      {priority.priority === "critica" ? "Crítica" : "Alta"}
+                    </span>
+                  </div>
+                  <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                    <div><dt className="text-slate-500">Vencimento</dt><dd className="font-medium text-slate-800">{formatExecutiveDate(priority.dueDate)}</dd></div>
+                    <div><dt className="text-slate-500">Valor</dt><dd className="font-medium text-slate-800">{formatExecutiveAmount(priority.amount)}</dd></div>
+                    <div className="sm:col-span-2"><dt className="text-slate-500">Motivo</dt><dd className="text-slate-800">{priority.priorityReason}</dd></div>
+                    <div className="sm:col-span-2"><dt className="text-slate-500">Recomendação</dt><dd className="text-slate-800">{priority.recommendation}</dd></div>
+                    <div className="sm:col-span-2">
+                      <dt className="text-slate-500">Decisão humana</dt>
+                      <dd className="font-medium text-slate-800">{priority.requiresHumanDecision ? "Necessária" : "Não indicada nesta etapa"}</dd>
+                    </div>
+                  </dl>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-2 border-b border-slate-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
