@@ -4,7 +4,7 @@ import {
   CheckCheck, Filter, ChevronRight, X, Calendar, Loader2,
 } from "lucide-react";
 import { Alert, AlertSeverity, AlertCategory } from "./types";
-import { alertsApi } from "../../services/alertsApi";
+import { alertsApi, type AlertDto } from "../../services/alertsApi";
 import { companiesApi } from "../../services/companiesApi";
 import { Company } from "../empresas/types";
 
@@ -26,17 +26,21 @@ const CAT_COLOR: Record<AlertCategory, string> = {
 };
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "Data indisponível";
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
 function fmtRelative(iso: string) {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return "Data indisponível";
+  const diff = Math.floor((Date.now() - timestamp) / 86400000);
   if (diff === 0) return "hoje";
   if (diff === 1) return "ontem";
   return `${diff}d atrás`;
 }
 
 // Adapter: backend DTO -> frontend Alert shape
-function adaptAlert(dto: any): Alert {
+function adaptAlert(dto: AlertDto): Alert {
   return {
     id: dto.id,
     companyId: dto.companyId,
@@ -53,10 +57,14 @@ function adaptAlert(dto: any): Alert {
   };
 }
 
+function severityConfig(severity: string) {
+  return SEV_CFG[severity as AlertSeverity] ?? SEV_CFG["Informativo"];
+}
+
 // ── Alert Drawer ─────────────────────────────────────────────────────────────
 
 const AlertDrawer = ({ alert, companies, onClose, onMarkRead }: { alert: Alert; companies: Company[]; onClose: () => void; onMarkRead: (id: string) => void }) => {
-  const sc = SEV_CFG[alert.severity];
+  const sc = severityConfig(alert.severity);
   const SevIcon = sc.icon;
   const company = alert.companyId ? companies.find((c) => c.id === alert.companyId) : null;
 
@@ -182,7 +190,7 @@ export default function CentralAlertas() {
       })
       .sort((a, b) => {
         const sevOrder: Record<AlertSeverity, number> = { "Crítico": 0, "Atenção": 1, "Informativo": 2 };
-        return sevOrder[a.severity] - sevOrder[b.severity] ||
+        return (sevOrder[a.severity] ?? 2) - (sevOrder[b.severity] ?? 2) ||
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [alerts, sevFilter, catFilter, showUnread]);
@@ -293,7 +301,7 @@ export default function CentralAlertas() {
           </div>
         )}
         {filtered.map((alert) => {
-          const sc = SEV_CFG[alert.severity];
+          const sc = severityConfig(alert.severity);
           const SevIcon = sc.icon;
           const company = alert.companyId ? companies.find((c) => c.id === alert.companyId) : null;
 
