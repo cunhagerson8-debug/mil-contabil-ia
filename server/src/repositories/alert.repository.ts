@@ -28,6 +28,13 @@ export interface AlertFilters {
   read?: boolean;
 }
 
+const ALERT_COLUMNS = `
+  id, firm_id, company_id, title, description, severity, category,
+  due_date::text AS due_date, read, read_at, read_by, action_label,
+  action_target, source_module, source_obligation_id, source_invoice_id,
+  source_certificate_id, created_at
+`;
+
 export const alertRepository = {
   async findAll(client: PoolClient, filters: AlertFilters = {}): Promise<AlertRow[]> {
     const conditions: string[] = [];
@@ -51,19 +58,19 @@ export const alertRepository = {
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const sql = `SELECT * FROM alerts ${where} ORDER BY created_at DESC`;
+    const sql = `SELECT ${ALERT_COLUMNS} FROM alerts ${where} ORDER BY created_at DESC`;
     const result = await client.query<AlertRow>(sql, params);
     return result.rows;
   },
 
   async findById(client: PoolClient, id: string): Promise<AlertRow | null> {
-    const result = await client.query<AlertRow>(`SELECT * FROM alerts WHERE id = $1`, [id]);
+    const result = await client.query<AlertRow>(`SELECT ${ALERT_COLUMNS} FROM alerts WHERE id = $1`, [id]);
     return result.rows[0] ?? null;
   },
 
   async markRead(client: PoolClient, id: string, userId: string): Promise<AlertRow | null> {
     const result = await client.query<AlertRow>(
-      `UPDATE alerts SET read = true, read_at = now(), read_by = $1 WHERE id = $2 RETURNING *`,
+      `UPDATE alerts SET read = true, read_at = now(), read_by = $1 WHERE id = $2 RETURNING ${ALERT_COLUMNS}`,
       [userId, id]
     );
     return result.rows[0] ?? null;

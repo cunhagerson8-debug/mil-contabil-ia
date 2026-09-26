@@ -30,6 +30,22 @@ function fmtDate(iso: string) {
   if (Number.isNaN(date.getTime())) return "Data indisponível";
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
+
+function fmtCivilDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return "Data indisponível";
+
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (date.toISOString().slice(0, 10) !== value) return "Data indisponível";
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 function fmtRelative(iso: string) {
   const timestamp = new Date(iso).getTime();
   if (Number.isNaN(timestamp)) return "Data indisponível";
@@ -99,7 +115,7 @@ const AlertDrawer = ({ alert, companies, onClose, onMarkRead }: { alert: Alert; 
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Vencimento</p>
                 <p className="text-sm font-semibold text-red-700 flex items-center gap-1">
-                  <Calendar size={13} /> {fmtDate(alert.dueDate)}
+                  <Calendar size={13} /> {fmtCivilDate(alert.dueDate)}
                 </p>
               </div>
             )}
@@ -331,7 +347,7 @@ export default function CentralAlertas() {
                       )}
                       {alert.dueDate && (
                         <span className="text-[10px] font-bold text-red-500 flex items-center gap-1">
-                          <Calendar size={10} /> vence {fmtDate(alert.dueDate)}
+                          <Calendar size={10} /> vence {fmtCivilDate(alert.dueDate)}
                         </span>
                       )}
                     </div>

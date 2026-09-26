@@ -69,6 +69,28 @@ function obligationStatus(row: unknown): string | undefined {
   return typeof status === "string" ? status : undefined;
 }
 
+function toCivilDate(value: unknown): string | null {
+  let civilDate: string;
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const year = value.getFullYear().toString().padStart(4, "0");
+    const month = (value.getMonth() + 1).toString().padStart(2, "0");
+    const day = value.getDate().toString().padStart(2, "0");
+    civilDate = `${year}-${month}-${day}`;
+  } else if (typeof value === "string") {
+    const match = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(value);
+    if (!match) return null;
+    civilDate = match[1];
+  } else {
+    return null;
+  }
+
+  const [year, month, day] = civilDate.split("-").map(Number);
+  const validated = new Date(Date.UTC(year, month - 1, day));
+  return validated.toISOString().slice(0, 10) === civilDate ? civilDate : null;
+}
+
 function createPriorityCandidate(row: unknown, priority: "critica" | "alta"): PriorityCandidate {
   const sourceId = obligationField(row, "id");
   const companyId = obligationField(row, "company_id", "companyId");
@@ -84,7 +106,7 @@ function createPriorityCandidate(row: unknown, priority: "critica" | "alta"): Pr
     companyName: null,
     obligationType: typeof rawType === "string" ? rawType : "Não informado",
     obligationName: typeof rawName === "string" ? rawName : "Obrigação fiscal",
-    dueDate: typeof rawDueDate === "string" ? rawDueDate : null,
+    dueDate: toCivilDate(rawDueDate),
     ...(amount !== undefined && Number.isFinite(amount) ? { amount } : {}),
     priority,
     priorityReason: priority === "critica"
