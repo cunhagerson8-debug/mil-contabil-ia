@@ -2,7 +2,10 @@ import { pool } from "../db/pool.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { taxObligationRepository } from "../repositories/tax-obligation.repository.js";
-import { TenantContext } from "../db/withTenantContext.js";
+import { taxObligationRepository as taxObligationRepositoryAllFirms } from "../repositories/taxObligation.repository.js";
+import { aiContextRepository } from "../repositories/ai-context.repository.js";
+import { TenantContext, withPlatformReadOnlyContext } from "../db/withTenantContext.js";
+import { ForbiddenError } from "../utils/errors.js";
 
 export type AuditStatus = "ok" | "warning" | "error";
 
@@ -61,7 +64,18 @@ export class MilAuditorService {
   async runAudit(ctx: TenantContext): Promise<MilAuditReport> {
     const checks: AuditCheck[] = [];
 
-    const taxObligations = await taxObligationRepository.listByFirm(ctx);
+    // platform_admin não pertence a nenhum escritório (firmId = null): o
+    // filtro por firm_id do fluxo comum (listByFirm) sempre retornaria vazio.
+    // Reaproveita o mesmo caminho seguro já usado pela tela de Obrigações
+    // Fiscais para platform_admin — leitura somente-leitura sem filtro de
+    // firm, com revalidação explícita do usuário no banco.
+    const taxObligations = ctx.role === "platform_admin"
+      ? await withPlatformReadOnlyContext(async (client) => {
+          const isPlatformAdmin = await aiContextRepository.assertPlatformAdmin(client, ctx.userId);
+          if (!isPlatformAdmin) throw new ForbiddenError("Usuário não autorizado como platform_admin.");
+          return taxObligationRepositoryAllFirms.findAll(client);
+        })
+      : await taxObligationRepository.listByFirm(ctx);
 
 const overdueObligations = taxObligations.filter(
   (item) => item.status === "vencida"
