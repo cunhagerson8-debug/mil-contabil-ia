@@ -1,12 +1,37 @@
 import { withPlatformReadOnlyContext, withTenantContext, type TenantContext } from "../db/withTenantContext.js";
 import { aiContextRepository, AI_CONTEXT_LIMITS, type AiObligationRow, type AiPlatformObligationRow } from "../repositories/ai-context.repository.js";
+import { milAuditorSummaryService, type ExecutiveSummary } from "./mil-auditor-summary.service.js";
 import type {
   AiCompanyRecord,
   AiContextData,
+  AiExecutiveSummary,
   AiObligationClassification,
   AiObligationRecord,
 } from "../types/ai-context.js";
 import { ConflictError, ForbiddenError } from "../utils/errors.js";
+
+// Projeta o Resumo Executivo do MIL Auditor para a allowlist permitida à IA:
+// remove companyId/IDs internos e valor financeiro. Prioridade, motivo e
+// necessidade de decisão humana já vêm calculados deterministicamente pelo
+// backend e são apenas repassados, nunca recalculados aqui.
+function toAiExecutiveSummary(summary: ExecutiveSummary): AiExecutiveSummary {
+  return {
+    totalCriticalPendencies: summary.totalCriticalPendencies,
+    totalOverdueObligations: summary.totalOverdueObligations,
+    totalUpcomingObligations: summary.totalUpcomingObligations,
+    factualSummary: summary.factualSummary,
+    topPriorities: summary.topPriorities.map((priority) => ({
+      companyName: priority.companyName,
+      obligationType: priority.obligationType,
+      obligationName: priority.obligationName,
+      dueDate: priority.dueDate,
+      priority: priority.priority,
+      priorityReason: priority.priorityReason,
+      recommendation: priority.recommendation,
+      requiresHumanDecision: priority.requiresHumanDecision,
+    })),
+  };
+}
 
 function classifyObligation(row: AiObligationRow, today: Date): AiObligationClassification {
   if (row.status === "nao_aplicavel") return "nao_aplicavel";
@@ -64,7 +89,12 @@ export const aiContextService = {
       throw new ConflictError("A Assistente MIL IA exige um usuário vinculado a um escritório.");
     }
 
-    return withTenantContext(ctx, async (client) => {
+    // Resumo Executivo calculado pelo mesmo caminho determinístico do MIL
+    // Auditor: usa withTenantContext/RLS internamente (ver
+    // mil-auditor-summary.service.ts), sem duplicar a regra de priorização.
+    const [executiveSummary, contextData] = await Promise.all([
+      milAuditorSummaryService.build(ctx),
+      withTenantContext(ctx, async (client): Promise<Omit<AiContextData, "executiveSummary">> => {
       const normalizedMessage = message.toLocaleLowerCase("pt-BR");
       const [totalEmpresas, companies] = await Promise.all([
         aiContextRepository.countCompanies(client),
@@ -110,7 +140,10 @@ export const aiContextService = {
         obrigacoesRelevantes: relevant,
         registrosLimitados: totalEmpresas > AI_CONTEXT_LIMITS.companies || obligations.length >= AI_CONTEXT_LIMITS.obligations,
       };
-    });
+      }),
+    ]);
+
+    return { ...contextData, executiveSummary: toAiExecutiveSummary(executiveSummary.executiveSummary) };
   },
 
   async buildForPlatformAdmin(ctx: TenantContext, message: string): Promise<AiContextData> {
@@ -118,7 +151,12 @@ export const aiContextService = {
       throw new ForbiddenError("Somente platform_admin pode consultar a visão global da plataforma.");
     }
 
-    return withPlatformReadOnlyContext(async (client) => {
+    // milAuditorSummaryService.build já usa withPlatformReadOnlyContext +
+    // assertPlatformAdmin internamente para este role — não repete a regra
+    // de negócio, apenas reaproveita o mesmo caminho administrativo seguro.
+    const [executiveSummary, contextData] = await Promise.all([
+      milAuditorSummaryService.build(ctx),
+      withPlatformReadOnlyContext(async (client): Promise<Omit<AiContextData, "executiveSummary">> => {
       const isPlatformAdmin = await aiContextRepository.assertPlatformAdmin(client, ctx.userId);
       if (!isPlatformAdmin) {
         throw new ForbiddenError("Usuário não autorizado como platform_admin.");
@@ -168,6 +206,9 @@ export const aiContextService = {
         obrigacoesRelevantes,
         registrosLimitados: true,
       };
-    });
+      }),
+    ]);
+
+    return { ...contextData, executiveSummary: toAiExecutiveSummary(executiveSummary.executiveSummary) };
   },
 };
