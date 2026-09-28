@@ -30,7 +30,7 @@ export const usersApi = {
     return res.user;
   },
 
-  async invite(data: { email: string; fullName: string; role: string }) {
+  async invite(data: { email: string; fullName: string; role: string; firmId?: string }) {
     const res = await apiRequest<{ user: ManagedUserDto }>("/api/users/invite", { method: "POST", body: data });
     return res.user;
   },

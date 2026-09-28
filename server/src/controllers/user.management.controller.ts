@@ -12,6 +12,8 @@ const inviteSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(1),
   role: z.string(),
+  // Só é considerado quando o requisitante é platform_admin; nunca usado como autorização.
+  firmId: z.string().uuid().optional(),
 });
 
 const updateStatusSchema = z.object({ status: z.string() });

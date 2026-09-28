@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Users, Plus, Search, X, ShieldCheck, Mail, Phone,
   ChevronRight, Clock, Ban, CheckCircle2, MoreVertical, Building2, Loader2,
@@ -6,6 +6,7 @@ import {
 import { ManagedUser } from "./types";
 import { usersApi } from "../../services/usersApi";
 import { companiesApi } from "../../services/companiesApi";
+import { firmsApi, type Firm } from "../../services/firmsApi";
 import { Company } from "../empresas/types";
 import { ROLE_LABELS, USER_STATUS_LABELS, UserRole, UserStatus } from "../auth/types";
 import { useAuth } from "../auth/AuthContext";
@@ -176,45 +177,156 @@ const UserDrawer = ({
 // -----------------------------------------------------------------------------
 // Modal de convite
 // -----------------------------------------------------------------------------
-const InviteUserModal = ({ onClose }: { onClose: () => void }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-    <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-      <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-        <h3 className="text-lg font-bold text-slate-900">Convidar usuário</h3>
-        <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
-      </div>
-      <div className="p-6 space-y-4">
-        <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nome completo</label>
-          <input placeholder="Nome do convidado" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+const InviteUserModal = ({
+  onClose,
+  isPlatformAdmin,
+  onInvited,
+}: {
+  onClose: () => void;
+  isPlatformAdmin: boolean;
+  onInvited: () => void;
+}) => {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<string>(isPlatformAdmin ? "firm_owner" : "accountant");
+  const [firmId, setFirmId] = useState("");
+  const [firms, setFirms] = useState<Firm[]>([]);
+  const [loadingFirms, setLoadingFirms] = useState(isPlatformAdmin);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPlatformAdmin) return;
+    let cancelled = false;
+    async function loadFirms() {
+      try {
+        const data = await firmsApi.list();
+        if (!cancelled) setFirms(data);
+      } catch {
+        if (!cancelled) setError("Não foi possível carregar os escritórios.");
+      } finally {
+        if (!cancelled) setLoadingFirms(false);
+      }
+    }
+    loadFirms();
+    return () => { cancelled = true; };
+  }, [isPlatformAdmin]);
+
+  async function handleSubmit() {
+    if (submitting) return;
+    if (!fullName.trim() || !email.trim()) {
+      setError("Preencha nome completo e e-mail.");
+      return;
+    }
+    // firmId é apenas o dado da operação solicitada; a autorização real é revalidada no backend.
+    if (isPlatformAdmin && !firmId) {
+      setError("Selecione o escritório contábil.");
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+    try {
+      await usersApi.invite({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        role,
+        ...(isPlatformAdmin ? { firmId } : {}),
+      });
+      onInvited();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível enviar o convite.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-900">Convidar usuário</h3>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
         </div>
-        <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">E-mail</label>
-          <input type="email" placeholder="email@empresa.com.br" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nome completo</label>
+            <input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Nome do convidado"
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">E-mail</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@empresa.com.br"
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Função</label>
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            >
+              {isPlatformAdmin ? (
+                <>
+                  <option value="firm_owner">{ROLE_LABELS.firm_owner}</option>
+                  <option value="accountant">{ROLE_LABELS.accountant}</option>
+                </>
+              ) : (
+                <>
+                  <option value="accountant">{ROLE_LABELS.accountant}</option>
+                  <option value="company_manager">{ROLE_LABELS.company_manager}</option>
+                  <option value="company_user">{ROLE_LABELS.company_user}</option>
+                </>
+              )}
+            </select>
+          </div>
+          {isPlatformAdmin && (
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Escritório Contábil</label>
+              <select
+                value={firmId}
+                onChange={(e) => setFirmId(e.target.value)}
+                disabled={loadingFirms}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              >
+                <option value="">{loadingFirms ? "Carregando escritórios..." : "Selecione um escritório"}</option>
+                {firms.map((firm) => (
+                  <option key={firm.id} value={firm.id}>{firm.trade_name || firm.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
+          <p className="text-xs text-slate-400">
+            Um e-mail de convite será enviado com instruções para criar a senha de acesso.
+          </p>
         </div>
-        <div>
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Função</label>
-          <select className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
-            <option value="accountant">{ROLE_LABELS.accountant}</option>
-            <option value="company_manager">{ROLE_LABELS.company_manager}</option>
-            <option value="company_user">{ROLE_LABELS.company_user}</option>
-          </select>
+        <div className="p-6 border-t border-slate-100 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || (isPlatformAdmin && loadingFirms)}
+            className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {submitting ? "Enviando..." : "Enviar convite"}
+          </button>
         </div>
-        <p className="text-xs text-slate-400">
-          Um e-mail de convite será enviado com instruções para criar a senha de acesso.
-        </p>
-      </div>
-      <div className="p-6 border-t border-slate-100 flex gap-3">
-        <button onClick={onClose} className="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">
-          Cancelar
-        </button>
-        <button className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors">
-          Enviar convite
-        </button>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // -----------------------------------------------------------------------------
 // Página principal
@@ -230,6 +342,15 @@ export default function Usuarios() {
   const [loading, setLoading] = useState(true);
 
   const canManage = user?.role === "firm_owner" || user?.role === "platform_admin";
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const userData = await usersApi.list();
+      setUsers(userData.map(adaptUser));
+    } catch {
+      // mantém a lista atual em caso de falha ao atualizar após o convite
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -361,7 +482,13 @@ export default function Usuarios() {
       </div>
 
       {selected && <UserDrawer managedUser={selected} companies={companies} onClose={() => setSelected(null)} canManage={canManage} />}
-      {showInvite && <InviteUserModal onClose={() => setShowInvite(false)} />}
+      {showInvite && (
+        <InviteUserModal
+          onClose={() => setShowInvite(false)}
+          isPlatformAdmin={user?.role === "platform_admin"}
+          onInvited={loadUsers}
+        />
+      )}
     </div>
   );
 }
