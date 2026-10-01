@@ -156,6 +156,15 @@ export interface UserRowWithFirm extends UserRow {
   firm_name: string | null;
 }
 
+export type ManagedUserRow = Pick<
+  UserRow,
+  "id" | "firm_id" | "role" | "status" | "full_name" | "email" | "phone" | "avatar_url" | "mfa_enabled" | "last_login_at" | "created_at"
+> & {
+  firm_name: string | null;
+  invited_at: string | null;
+  invited_by: string | null;
+};
+
 export interface UserCompanyAccessRow {
   user_id: string;
   company_id: string;

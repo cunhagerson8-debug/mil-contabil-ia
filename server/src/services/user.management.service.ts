@@ -2,6 +2,7 @@ import { TenantContext, withPlatformContext, withTenantContext } from "../db/wit
 import { userManagementRepository, UserFilters } from "../repositories/user.management.repository.js";
 import { aiContextRepository } from "../repositories/ai-context.repository.js";
 import { findFirmById } from "../repositories/firm.repository.js";
+import { toManagedUserDto } from "../mappers/user.mapper.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../utils/errors.js";
 
 // Nesta etapa, platform_admin só pode convidar diretamente para o comando do
@@ -11,7 +12,10 @@ const PLATFORM_ADMIN_INVITE_ROLES = new Set(["firm_owner", "accountant"]);
 
 export const userManagementService = {
   async list(ctx: TenantContext, filters: UserFilters) {
-    return withTenantContext(ctx, (client) => userManagementRepository.findAll(client, filters));
+    return withTenantContext(ctx, async (client) => {
+      const users = await userManagementRepository.findAll(client, filters);
+      return users.map(toManagedUserDto);
+    });
   },
 
   async getById(ctx: TenantContext, id: string) {
@@ -19,7 +23,11 @@ export const userManagementService = {
       const user = await userManagementRepository.findById(client, id);
       if (!user) throw new NotFoundError("Usuário", id);
       const access = await userManagementRepository.findCompanyAccess(client, id);
-      return { ...user, companyAccess: access };
+      return {
+        ...toManagedUserDto(user),
+        companyAccess: access.map((item) => item.company_id),
+        canManageCompanies: access.length > 0 ? access.some((item) => item.can_manage) : undefined,
+      };
     });
   },
 
@@ -27,7 +35,7 @@ export const userManagementService = {
     return withTenantContext(ctx, async (client) => {
       const user = await userManagementRepository.updateStatus(client, id, status);
       if (!user) throw new NotFoundError("Usuário", id);
-      return user;
+      return toManagedUserDto(user);
     });
   },
 
@@ -35,7 +43,7 @@ export const userManagementService = {
     return withTenantContext(ctx, async (client) => {
       const user = await userManagementRepository.updateRole(client, id, role);
       if (!user) throw new NotFoundError("Usuário", id);
-      return user;
+      return toManagedUserDto(user);
     });
   },
 
@@ -57,18 +65,20 @@ export const userManagementService = {
         const firm = await findFirmById(client, data.firmId);
         if (!firm) throw new NotFoundError("Escritório", data.firmId);
 
-        return userManagementRepository.invite(client, {
+        const user = await userManagementRepository.invite(client, {
           email: data.email,
           fullName: data.fullName,
           role: data.role,
           firmId: firm.id,
         });
+        return toManagedUserDto(user);
       });
     }
 
     // Usuário de escritório: firmId externo é ignorado — sempre o próprio ctx.firmId sob RLS.
-    return withTenantContext(ctx, (client) =>
-      userManagementRepository.invite(client, { email: data.email, fullName: data.fullName, role: data.role, firmId: ctx.firmId! })
-    );
+    return withTenantContext(ctx, async (client) => {
+      const user = await userManagementRepository.invite(client, { email: data.email, fullName: data.fullName, role: data.role, firmId: ctx.firmId! });
+      return toManagedUserDto(user);
+    });
   },
 };

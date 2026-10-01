@@ -165,6 +165,25 @@ export interface AuthUserDto {
   canManageCompanies?: boolean;
 }
 
+export interface ManagedUserDto {
+  id: string;
+  firmId: string | null;
+  firmName?: string;
+  role: UserRole;
+  status: UserStatus;
+  fullName: string;
+  email: string;
+  phone?: string;
+  avatarUrl?: string;
+  mfaEnabled: boolean;
+  lastLoginAt?: string;
+  createdAt: string;
+  invitedAt?: string;
+  invitedBy?: string;
+  companyAccess?: string[];
+  canManageCompanies?: boolean;
+}
+
 export interface LoginInput {
   email: string;
   password: string;
