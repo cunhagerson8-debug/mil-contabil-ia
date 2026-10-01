@@ -16,6 +16,13 @@ export interface UserFilters {
   search?: string;
 }
 
+interface InvitationData {
+  userId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  createdBy: string;
+}
+
 export const userManagementRepository = {
   async findAll(client: PoolClient, filters: UserFilters = {}): Promise<ManagedUserRow[]> {
     const conditions: string[] = [];
@@ -60,6 +67,24 @@ export const userManagementRepository = {
     return result.rows;
   },
 
+  async revokePendingInvitations(client: PoolClient, userId: string): Promise<void> {
+    await client.query(
+      `UPDATE user_invitations
+       SET revoked_at = now()
+       WHERE user_id = $1 AND used_at IS NULL AND revoked_at IS NULL`,
+      [userId]
+    );
+  },
+
+  async createInvitation(client: PoolClient, data: InvitationData): Promise<void> {
+    await this.revokePendingInvitations(client, data.userId);
+    await client.query(
+      `INSERT INTO user_invitations (user_id, token_hash, expires_at, created_by)
+       VALUES ($1, $2, $3, $4)`,
+      [data.userId, data.tokenHash, data.expiresAt, data.createdBy]
+    );
+  },
+
   async updateStatus(client: PoolClient, id: string, status: string): Promise<ManagedUserRow | null> {
     await client.query(`UPDATE users SET status = $1 WHERE id = $2`, [status, id]);
     return this.findById(client, id);
@@ -70,12 +95,26 @@ export const userManagementRepository = {
     return this.findById(client, id);
   },
 
-  async invite(client: PoolClient, data: { firmId: string; email: string; fullName: string; role: string }): Promise<ManagedUserRow> {
+  async invite(client: PoolClient, data: {
+    firmId: string;
+    email: string;
+    fullName: string;
+    role: string;
+    invitedBy: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<ManagedUserRow> {
     const result = await client.query<{ id: string }>(
-      `INSERT INTO users (firm_id, email, full_name, role, status, auth_provider)
-       VALUES ($1,$2,$3,$4,'invited','email') RETURNING id`,
-      [data.firmId, data.email, data.fullName, data.role]
+      `INSERT INTO users (firm_id, email, full_name, role, status, auth_provider, invited_by, invited_at)
+       VALUES ($1,$2,$3,$4,'invited','email',$5,now()) RETURNING id`,
+      [data.firmId, data.email, data.fullName, data.role, data.invitedBy]
     );
+    await this.createInvitation(client, {
+      userId: result.rows[0].id,
+      tokenHash: data.tokenHash,
+      expiresAt: data.expiresAt,
+      createdBy: data.invitedBy,
+    });
     const user = await this.findById(client, result.rows[0].id);
     if (!user) throw new Error("Falha ao recarregar usuário recém-criado.");
     return user;

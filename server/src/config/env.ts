@@ -6,6 +6,12 @@
 // =============================================================================
 import "dotenv/config";
 
+const inviteTokenTtlHours = Number(process.env.INVITE_TOKEN_TTL_HOURS ?? 72);
+
+if (!Number.isInteger(inviteTokenTtlHours) || inviteTokenTtlHours < 1 || inviteTokenTtlHours > 168) {
+  throw new Error("INVITE_TOKEN_TTL_HOURS deve ser um número inteiro entre 1 e 168.");
+}
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -22,6 +28,7 @@ export const env = {
   jwtSecret: required("JWT_SECRET"),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? "8h",
   bcryptSaltRounds: Number(process.env.BCRYPT_SALT_ROUNDS ?? 12),
+  inviteTokenTtlHours,
 
   port: Number(process.env.PORT ?? 4000),
   nodeEnv: process.env.NODE_ENV ?? "development",
