@@ -8,6 +8,7 @@ adminFirmsRouter.use(requireAuth, requireRole("platform_admin"));
 
 adminFirmsRouter.get("/", adminFirmController.list);
 adminFirmsRouter.post("/", adminFirmController.create);
+adminFirmsRouter.post("/onboarding", adminFirmController.onboard);
 adminFirmsRouter.get("/:firmId", adminFirmController.getById);
 adminFirmsRouter.put("/:firmId", adminFirmController.update);
 adminFirmsRouter.patch("/:firmId/status", adminFirmController.updateStatus);

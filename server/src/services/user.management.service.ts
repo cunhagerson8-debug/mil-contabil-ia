@@ -1,4 +1,4 @@
-﻿import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { TenantContext, withPlatformContext, withTenantContext } from "../db/withTenantContext.js";
 import { userManagementRepository, UserFilters } from "../repositories/user.management.repository.js";
 import { aiContextRepository } from "../repositories/ai-context.repository.js";
@@ -13,7 +13,7 @@ import { emailService } from "./email.service.js";
 // tratados em etapa separada.
 const PLATFORM_ADMIN_INVITE_ROLES = new Set(["firm_owner", "accountant"]);
 
-function createInvitationCredentials() {
+export function createInvitationCredentials() {
   const token = randomBytes(32).toString("base64url");
   return {
     token,

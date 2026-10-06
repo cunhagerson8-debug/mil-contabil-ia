@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Building2, Eye, Loader2, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import { ApiError } from "../../services/apiClient";
-import { firmsApi, Firm, FirmInput, FirmStatus } from "../../services/firmsApi";
+import { firmsApi, Firm, FirmInput, FirmStatus, OnboardFirmResult } from "../../services/firmsApi";
 
 const STATUS_LABELS: Record<FirmStatus, string> = {
   active: "Ativo", trial: "Em teste", suspended: "Suspenso", cancelled: "Cancelado",
@@ -24,15 +24,36 @@ function FirmForm({ initial, onClose, onSaved }: { initial?: Firm; onClose: () =
     name: initial.name, trade_name: initial.trade_name ?? "", cnpj: initial.cnpj, email: initial.email,
     phone: initial.phone ?? "", timezone: initial.timezone, status: initial.status,
   } : emptyForm);
+  const [adminFullName, setAdminFullName] = useState("");
+  const [result, setResult] = useState<OnboardFirmResult | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const update = (key: keyof FirmInput, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setError(null);
-    try { initial ? await firmsApi.update(initial.id, form) : await firmsApi.create(form); onSaved(); }
+    try {
+      if (initial) { await firmsApi.update(initial.id, form); onSaved(); }
+      else {
+        const { status: _status, ...firmData } = form;
+        setResult(await firmsApi.onboard({ ...firmData, adminFullName }));
+      }
+    }
     catch (err) { setError(err instanceof ApiError ? err.message : "Não foi possível salvar o escritório."); }
     finally { setSaving(false); }
+  }
+
+  if (result) {
+    return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <h2 className="text-xl font-black text-slate-900">Escritório criado</h2>
+        <p className="mt-3 text-sm text-slate-600"><b>{result.firm.name}</b> foi cadastrado e o administrador <b>{result.user.fullName}</b> ({result.user.email}) foi registrado como proprietário do escritório.</p>
+        {result.emailSent
+          ? <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-medium text-emerald-800">O convite foi enviado por e-mail.</p>
+          : <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">O escritório e o convite foram criados, mas o e-mail NÃO pôde ser enviado. Será necessário reenviar o convite.</p>}
+        <div className="mt-6 flex justify-end"><button type="button" onClick={onSaved} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700">Concluir</button></div>
+      </div>
+    </div>;
   }
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
@@ -41,10 +62,11 @@ function FirmForm({ initial, onClose, onSaved }: { initial?: Firm; onClose: () =
       <div className="space-y-4 p-6">
         {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{error}</div>}
         <label className="block text-xs font-bold text-slate-500">Razão Social<input required minLength={2} value={form.name} onChange={(e) => update("name", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label>
+        {!initial && <label className="block text-xs font-bold text-slate-500">Nome completo do administrador responsável<input required minLength={2} value={adminFullName} onChange={(e) => setAdminFullName(e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label>}
         <label className="block text-xs font-bold text-slate-500">Nome Fantasia<input value={form.trade_name} onChange={(e) => update("trade_name", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label>
-        <div className="grid gap-4 sm:grid-cols-2"><label className="block text-xs font-bold text-slate-500">CNPJ<input required minLength={14} value={form.cnpj} onChange={(e) => update("cnpj", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label><label className="block text-xs font-bold text-slate-500">E-mail<input required type="email" value={form.email} onChange={(e) => update("email", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label></div>
+        <div className="grid gap-4 sm:grid-cols-2"><label className="block text-xs font-bold text-slate-500">CNPJ<input required minLength={14} value={form.cnpj} onChange={(e) => update("cnpj", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label><label className="block text-xs font-bold text-slate-500">{initial ? "E-mail" : "E-mail do administrador (também do escritório)"}<input required type="email" value={form.email} onChange={(e) => update("email", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label></div>
         <div className="grid gap-4 sm:grid-cols-2"><label className="block text-xs font-bold text-slate-500">Telefone<input value={form.phone} onChange={(e) => update("phone", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label><label className="block text-xs font-bold text-slate-500">Timezone<input value={form.timezone} onChange={(e) => update("timezone", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5" /></label></div>
-        <label className="block text-xs font-bold text-slate-500">Status<select value={form.status} onChange={(e) => update("status", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5"><option value="active">Ativo</option><option value="trial">Em teste</option><option value="suspended">Suspenso</option><option value="cancelled">Cancelado</option></select></label>
+        {initial ? <label className="block text-xs font-bold text-slate-500">Status<select value={form.status} onChange={(e) => update("status", e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5"><option value="active">Ativo</option><option value="trial">Em teste</option><option value="suspended">Suspenso</option><option value="cancelled">Cancelado</option></select></label> : <p className="text-xs text-slate-500">O escritório será criado com status <b>Em teste</b> e o administrador receberá um convite por e-mail para definir a senha.</p>}
       </div>
       <div className="flex justify-end gap-3 border-t border-slate-100 p-6"><button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-100">Cancelar</button><button disabled={saving} className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-60">{saving && <Loader2 size={16} className="animate-spin" />}Salvar escritório</button></div>
     </form>

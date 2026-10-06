@@ -27,7 +27,26 @@ export interface FirmInput {
   status?: FirmStatus;
 }
 
+export interface OnboardFirmInput {
+  name: string;
+  trade_name?: string;
+  cnpj: string;
+  email: string;
+  adminFullName: string;
+  phone?: string;
+  timezone?: string;
+}
+
+export interface OnboardFirmResult {
+  firm: Firm;
+  user: { id: string; fullName: string; email: string };
+  emailSent: boolean;
+}
+
 export const firmsApi = {
+  async onboard(input: OnboardFirmInput): Promise<OnboardFirmResult> {
+    return apiRequest<OnboardFirmResult>("/api/admin/firms/onboarding", { method: "POST", body: input });
+  },
   async list(): Promise<Firm[]> {
     const { firms } = await apiRequest<{ firms: Firm[] }>("/api/admin/firms");
     return firms;

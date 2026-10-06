@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
+import { firmOnboardingService } from "../services/firm.onboarding.service.js";
 import { firmService } from "../services/firm.service.js";
 import {
   createAdminFirmSchema,
+  onboardFirmSchema,
   updateAdminFirmSchema,
   updateAdminFirmStatusSchema,
 } from "../validators/firm.validators.js";
@@ -27,6 +29,15 @@ export const adminFirmController = {
     try {
       const input = createAdminFirmSchema.parse(req.body);
       res.status(201).json({ firm: await firmService.createForPlatformAdmin(req.tenantContext!, input) });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  async onboard(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const input = onboardFirmSchema.parse(req.body);
+      res.status(201).json(await firmOnboardingService.onboard(req.tenantContext!, input));
     } catch (error) {
       next(error);
     }
