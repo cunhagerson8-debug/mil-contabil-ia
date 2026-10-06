@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+﻿import { createHash, randomBytes } from "node:crypto";
 import { TenantContext, withPlatformContext, withTenantContext } from "../db/withTenantContext.js";
 import { userManagementRepository, UserFilters } from "../repositories/user.management.repository.js";
 import { aiContextRepository } from "../repositories/ai-context.repository.js";
@@ -6,6 +6,7 @@ import { findFirmById } from "../repositories/firm.repository.js";
 import { toManagedUserDto } from "../mappers/user.mapper.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../utils/errors.js";
 import { env } from "../config/env.js";
+import { emailService } from "./email.service.js";
 
 // Nesta etapa, platform_admin só pode convidar diretamente para o comando do
 // escritório; company_manager/company_user exigem vínculo de empresa e serão
@@ -15,6 +16,7 @@ const PLATFORM_ADMIN_INVITE_ROLES = new Set(["firm_owner", "accountant"]);
 function createInvitationCredentials() {
   const token = randomBytes(32).toString("base64url");
   return {
+    token,
     tokenHash: createHash("sha256").update(token).digest("hex"),
     expiresAt: new Date(Date.now() + env.inviteTokenTtlHours * 60 * 60 * 1000),
   };
@@ -58,6 +60,24 @@ export const userManagementService = {
   },
 
   async invite(ctx: TenantContext, data: { email: string; fullName: string; role: string; firmId?: string }) {
+    const { user, token, expiresAt } = await createInvitedUser(ctx, data);
+    // Envio fora da transação: o convite já está persistido; falha no e-mail não desfaz o usuário.
+    let emailSent = true;
+    try {
+      await emailService.sendInvitationEmail({ to: data.email, fullName: data.fullName, token, expiresAt });
+    } catch (err) {
+      emailSent = false;
+      console.error("[invite] Falha ao enviar e-mail de convite", {
+        userId: user.id,
+        reason: err instanceof Error ? err.message : "erro desconhecido",
+      });
+    }
+    return { user, emailSent };
+  },
+};
+
+async function createInvitedUser(ctx: TenantContext, data: { email: string; fullName: string; role: string; firmId?: string }) {
+  {
     if (ctx.role === "platform_admin") {
       return withPlatformContext(async (client) => {
         // firmId veio do frontend como dado solicitado, não como autorização:
@@ -82,9 +102,10 @@ export const userManagementService = {
           role: data.role,
           firmId: firm.id,
           invitedBy: ctx.userId,
-          ...invitation,
+          tokenHash: invitation.tokenHash,
+          expiresAt: invitation.expiresAt,
         });
-        return toManagedUserDto(user);
+        return { user: toManagedUserDto(user), token: invitation.token, expiresAt: invitation.expiresAt };
       });
     }
 
@@ -97,9 +118,10 @@ export const userManagementService = {
         role: data.role,
         firmId: ctx.firmId!,
         invitedBy: ctx.userId,
-        ...invitation,
+        tokenHash: invitation.tokenHash,
+        expiresAt: invitation.expiresAt,
       });
-      return toManagedUserDto(user);
+      return { user: toManagedUserDto(user), token: invitation.token, expiresAt: invitation.expiresAt };
     });
-  },
-};
+  }
+}

@@ -10,6 +10,7 @@ import { Request, Response, NextFunction } from "express";
 import {
   NotFoundError, ConflictError, ValidationError, UnauthorizedError, ForbiddenError,
 } from "../utils/errors.js";
+import { ZodError } from "zod";
 import { env } from "../config/env.js";
 
 const STATUS_BY_ERROR_NAME: Record<string, number> = {
@@ -28,6 +29,13 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   // — traduzidos para 409 em vez de virar um 500 genérico.
   if (error.code === "23505") {
     res.status(409).json({ error: "Já existe um registro com esses dados (violação de unicidade)." });
+    return;
+  }
+
+  // Falha de validação de entrada (zod): 400 com apenas a mensagem da regra,
+  // sem eco do valor enviado (pode conter senha/token).
+  if (err instanceof ZodError) {
+    res.status(400).json({ error: err.issues[0]?.message ?? "Dados inválidos." });
     return;
   }
 

@@ -3,7 +3,10 @@
 // =============================================================================
 import { Request, Response, NextFunction } from "express";
 import { authService } from "../services/auth.service.js";
-import { loginSchema, registerSchema, forgotPasswordSchema } from "../validators/auth.validators.js";
+import { invitationService } from "../services/invitation.service.js";
+import {
+  loginSchema, registerSchema, forgotPasswordSchema, validateInvitationSchema, acceptInvitationSchema,
+} from "../validators/auth.validators.js";
 import { UnauthorizedError } from "../utils/errors.js";
 
 export const authController = {
@@ -32,6 +35,26 @@ export const authController = {
       const { email } = forgotPasswordSchema.parse(req.body);
       const result = await authService.requestPasswordReset(email);
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async validateInvitation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token } = validateInvitationSchema.parse(req.body);
+      const invitation = await invitationService.validate(token);
+      res.json({ invitation });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async acceptInvitation(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token, password } = acceptInvitationSchema.parse(req.body);
+      await invitationService.accept(token, password);
+      res.json({ accepted: true });
     } catch (err) {
       next(err);
     }

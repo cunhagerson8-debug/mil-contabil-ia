@@ -64,3 +64,39 @@ export async function realGetCurrentUser(): Promise<AuthUser | null> {
     return null;
   }
 }
+
+export interface InvitationInfo {
+  fullName: string;
+  email: string;
+  firmName: string | null;
+  expiresAt: string;
+}
+
+export async function realValidateInvitation(token: string): Promise<InvitationInfo> {
+  try {
+    const { invitation } = await apiRequest<{ invitation: InvitationInfo }>("/api/auth/invitations/validate", {
+      method: "POST",
+      body: { token },
+    });
+    return invitation;
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new AuthError(err.message);
+    }
+    throw new AuthError("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
+  }
+}
+
+export async function realAcceptInvitation(token: string, password: string): Promise<void> {
+  try {
+    await apiRequest<{ accepted: boolean }>("/api/auth/invitations/accept", {
+      method: "POST",
+      body: { token, password },
+    });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new AuthError(err.message);
+    }
+    throw new AuthError("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
+  }
+}

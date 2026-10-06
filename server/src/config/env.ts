@@ -34,4 +34,6 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
   geminiApiKey: required("GEMINI_API_KEY"),
+  // Opcional no boot: sem a chave, apenas o envio de e-mail falha (de forma tratada).
+  resendApiKey: process.env.RESEND_API_KEY?.trim() || undefined,
 } as const;

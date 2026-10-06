@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Eye, EyeOff, Loader2, AlertCircle, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, ShieldCheck, CheckCircle2 } from "lucide-react";
 import { useAuth } from "./AuthContext";
 import { mockUsers, MOCK_PASSWORD } from "./mockUsers";
 import { ROLE_LABELS } from "./types";
@@ -7,9 +7,10 @@ import { ROLE_LABELS } from "./types";
 interface LoginPageProps {
   onForgotPassword: () => void;
   onRegister: () => void;
+  notice?: string | null;
 }
 
-export default function LoginPage({ onForgotPassword, onRegister }: LoginPageProps) {
+export default function LoginPage({ onForgotPassword, onRegister, notice }: LoginPageProps) {
   const { login, isSubmitting, error, clearError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,6 +65,13 @@ export default function LoginPage({ onForgotPassword, onRegister }: LoginPagePro
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
           <h2 className="text-lg font-bold text-slate-800 mb-1">Entrar na plataforma</h2>
           <p className="text-sm text-slate-500 mb-6">Acesse sua conta para continuar</p>
+
+          {notice && (
+            <div className="flex items-start gap-2.5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl mb-5">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-emerald-800 font-medium">{notice}</p>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-start gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-xl mb-5">

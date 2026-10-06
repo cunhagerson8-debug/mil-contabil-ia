@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+﻿import { Request, Response, NextFunction } from "express";
 import { userManagementService } from "../services/user.management.service.js";
 import { z } from "zod";
 
@@ -38,8 +38,8 @@ export const userManagementController = {
   async invite(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const data = inviteSchema.parse(req.body);
-      const user = await userManagementService.invite(req.tenantContext!, data);
-      res.status(201).json({ user });
+      const { user, emailSent } = await userManagementService.invite(req.tenantContext!, data);
+      res.status(201).json({ user, emailSent });
     } catch (err) { next(err); }
   },
 

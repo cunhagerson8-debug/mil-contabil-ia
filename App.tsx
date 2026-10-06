@@ -16,7 +16,7 @@ import {
 import { AppSection } from "./types";
 
 // ── Auth & access control ────────────────────────────────────────────────────
-import { AuthProvider, useAuth, LoginPage, ForgotPasswordPage, RegisterPage, PerfilPage } from "./modules/auth";
+import { AuthProvider, useAuth, LoginPage, ForgotPasswordPage, RegisterPage, PerfilPage, InviteAcceptPage } from "./modules/auth";
 import { ProtectedRoute, PermissionGuard, sectionsForRole, filterByCompanyAccess, SECTION_LABELS, canAccessSection } from "./architecture/access-control";
 import { obligationsByStatus, alertsByCategory, monthlyRevenueTrend } from "./architecture/dashboard-data";
 
@@ -905,10 +905,10 @@ function AuthenticatedShell() {
 // Public (unauthenticated) flow: login <-> forgot password
 // =============================================================================
 
-function PublicFlow() {
+function PublicFlow({ notice }: { notice?: string | null }) {
   const [screen, setScreen] = useState<"login" | "forgot" | "register">("login");
   return screen === "login"
-    ? <LoginPage onForgotPassword={() => setScreen("forgot")} onRegister={() => setScreen("register")} />
+    ? <LoginPage notice={notice} onForgotPassword={() => setScreen("forgot")} onRegister={() => setScreen("register")} />
     : screen === "forgot"
       ? <ForgotPasswordPage onBackToLogin={() => setScreen("login")} />
       : <RegisterPage onBackToLogin={() => setScreen("login")} />;
@@ -918,12 +918,49 @@ function PublicFlow() {
 // Root App
 // =============================================================================
 
+// Token do convite é lido uma única vez no carregamento do módulo e removido da
+// URL imediatamente (evita vazamento via histórico/Referer e dupla leitura do StrictMode).
+const INITIAL_INVITE_TOKEN: string | null = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("invite");
+  if (params.has("invite")) {
+    params.delete("invite");
+    const query = params.toString();
+    window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : "") + window.location.hash);
+  }
+  return token;
+})();
+
+function AppGate() {
+  const { logout } = useAuth();
+  const [inviteToken, setInviteToken] = useState<string | null>(INITIAL_INVITE_TOKEN);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  if (inviteToken !== null) {
+    return (
+      <InviteAcceptPage
+        token={inviteToken}
+        onAccepted={() => {
+          logout();
+          setNotice("Sua conta foi ativada com sucesso. Você já pode entrar com seu e-mail e a senha criada.");
+          setInviteToken(null);
+        }}
+        onCancel={() => setInviteToken(null)}
+      />
+    );
+  }
+
+  return (
+    <ProtectedRoute fallback={<PublicFlow notice={notice} />}>
+      <AuthenticatedShell />
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
-      <ProtectedRoute fallback={<PublicFlow />}>
-        <AuthenticatedShell />
-      </ProtectedRoute>
+      <AppGate />
     </AuthProvider>
   );
 }
