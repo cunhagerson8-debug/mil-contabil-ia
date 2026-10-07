@@ -75,11 +75,13 @@ function ClientFormModal({
     try {
       const servicos = form.servicosContratadosText.split("\n").map((s) => s.trim()).filter(Boolean);
       const input: ClientCreateInput = {
+        firmId: form.firmId,
         nome: form.nome,
         tipo: form.tipo,
         documento: form.documento,
         servicosContratados: servicos,
       };
+      
       if (isEdit) {
         await clientsApi.update(initial!.id, input);
       } else {
@@ -112,6 +114,27 @@ function ClientFormModal({
               <p className="text-sm text-red-700 font-medium">{error}</p>
             </div>
           )}
+
+          <div>
+  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+    Escritório Contábil
+  </label>
+  <select
+    required
+    value={form.firmId}
+    onChange={(e) => update("firmId", e.target.value)}
+    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+  >
+    <option value="">Selecione o escritório...</option>
+    {firms
+      .filter((firm) => firm.status === "active" || firm.status === "trial")
+      .map((firm) => (
+        <option key={firm.id} value={firm.id}>
+          {firm.trade_name || firm.name}
+        </option>
+      ))}
+  </select>
+</div>
 
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nome / Razão Social</label>
