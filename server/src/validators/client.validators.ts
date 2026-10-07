@@ -7,6 +7,7 @@ export const TIPO_CLIENTE_VALUES = ["Pessoa Física", "Pessoa Jurídica"] as con
 export const STATUS_CLIENTE_VALUES = ["Ativo", "Inativo", "Prospecto"] as const;
 
 export const createClientSchema = z.object({
+  firmId: z.string().uuid().optional(),
   companyId: z.string().uuid().optional(),
   nome: z.string().min(2, "Nome deve ter ao menos 2 caracteres."),
   tipo: z.enum(TIPO_CLIENTE_VALUES),

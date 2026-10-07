@@ -6,7 +6,7 @@ import {
 import { Client, StatusCliente, TipoCliente } from "./types";
 import { clientsApi, ClientCreateInput } from "../../services/clientsApi";
 import { ApiError } from "../../services/apiClient";
-
+import { firmsApi, type Firm } from "../../services/firmsApi";
 const statusStyles: Record<StatusCliente, string> = {
   Ativo: "bg-emerald-50 text-emerald-700 border-emerald-200",
   Inativo: "bg-slate-100 text-slate-500 border-slate-200",
@@ -26,13 +26,20 @@ const TIPO_OPTIONS: TipoCliente[] = ["Pessoa Física", "Pessoa Jurídica"];
 // Formulário de Criar/Editar
 // -----------------------------------------------------------------------------
 interface ClientFormState {
+  firmId: string;
   nome: string;
   tipo: TipoCliente;
   documento: string;
   servicosContratadosText: string; // textarea, um por linha — convertido em array no submit
 }
 
-const emptyForm: ClientFormState = { nome: "", tipo: "Pessoa Física", documento: "", servicosContratadosText: "" };
+const emptyForm: ClientFormState = {
+  firmId: "",
+  nome: "",
+  tipo: "Pessoa Física",
+  documento: "",
+  servicosContratadosText: "",
+};
 
 function ClientFormModal({
   initial, onClose, onSaved,
@@ -40,12 +47,22 @@ function ClientFormModal({
   const isEdit = !!initial;
   const [form, setForm] = useState<ClientFormState>(
     initial ? {
+      firmId: "",
       nome: initial.nome, tipo: initial.tipo, documento: initial.documento,
       servicosContratadosText: initial.servicosContratados.join("\n"),
     } : emptyForm
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [firms, setFirms] = useState<Firm[]>([]);
+
+  useEffect(() => {
+  if (isEdit) return;
+
+  firmsApi.list()
+    .then((data) => setFirms(data))
+    .catch(() => setError("Não foi possível carregar os escritórios contábeis."));
+}, [isEdit]);
 
   function update<K extends keyof ClientFormState>(key: K, value: ClientFormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));

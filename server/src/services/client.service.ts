@@ -1,11 +1,13 @@
 // =============================================================================
 // Service: Clients
 // =============================================================================
-import { TenantContext, withTenantContext } from "../db/withTenantContext.js";
+import { TenantContext, withTenantContext, withPlatformContext } from "../db/withTenantContext.js";
 import { clientRepository, ClientFilters } from "../repositories/client.repository.js";
+import { findFirmById } from "../repositories/firm.repository.js";
+import { aiContextRepository } from "../repositories/ai-context.repository.js";
 import { toClientDto, tipoClienteToDb, statusClienteToDb } from "../mappers/client.mapper.js";
 import { ClientCreateInput, ClientUpdateInput, ClientDto, StatusCliente } from "../types/dto.js";
-import { NotFoundError, ConflictError } from "../utils/errors.js";
+import { NotFoundError, ConflictError, ForbiddenError } from "../utils/errors.js";
 
 async function hydrate(client: any, row: Awaited<ReturnType<typeof clientRepository.findById>>): Promise<ClientDto> {
   if (!row) throw new NotFoundError("Cliente", "?");
@@ -38,7 +40,46 @@ export const clientService = {
   },
 
   async create(ctx: TenantContext, input: ClientCreateInput): Promise<ClientDto> {
-    if (!ctx.firmId) throw new ConflictError("Usuário sem escritório associado não pode cadastrar clientes.");
+    if (ctx.role === "platform_admin" && input.firmId) {
+      const targetFirmId = input.firmId;
+  return withPlatformContext(async (client) => {
+    const isPlatformAdmin = await aiContextRepository.assertPlatformAdmin(client, ctx.userId);
+    if (!isPlatformAdmin) {
+      throw new ForbiddenError("Usuário não autorizado como platform_admin.");
+    }
+
+    const firm = await findFirmById(client, targetFirmId);
+    if (!firm) throw new NotFoundError("Escritório", targetFirmId);
+    const existing = await clientRepository.findByDocumento(
+      client,
+      firm.id,
+      input.documento
+    );
+
+    if (existing) {
+      throw new ConflictError(
+        `Já existe um cliente com o documento ${input.documento} cadastrado neste escritório.`
+      );
+    }
+
+    const created = await clientRepository.create(client, {
+      firmId: firm.id,
+      companyId: input.companyId,
+      nome: input.nome,
+      tipo: tipoClienteToDb(input.tipo),
+      documento: input.documento,
+      servicosContratados: input.servicosContratados,
+    });
+
+    return hydrate(client, created);
+  });
+}
+
+if (!ctx.firmId) {
+  throw new ConflictError(
+    "Usuário sem escritório associado não pode cadastrar clientes."
+  );
+}
 
     return withTenantContext(ctx, async (client) => {
       const existing = await clientRepository.findByDocumento(client, ctx.firmId!, input.documento);

@@ -6,6 +6,7 @@ import { Client } from "../modules/clientes/types";
 // =============================================================================
 
 export interface ClientCreateInput {
+  firmId?: string;
   companyId?: string;
   nome: string;
   tipo: Client["tipo"];

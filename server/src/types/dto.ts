@@ -100,6 +100,7 @@ export interface ClientDto {
 }
 
 export interface ClientCreateInput {
+  firmId?: string;
   companyId?: string;
   nome: string;
   tipo: TipoCliente;
