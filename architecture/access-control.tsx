@@ -81,6 +81,9 @@ export const SECTION_LABELS: Record<AppSection, string> = {
 
 /** Subconjunto de seções acessíveis a um role — usado para filtrar a navegação. */
 export function sectionsForRole(role: UserRole): AppSection[] {
+ 
+ 
+  
   return (Object.keys(SECTION_ACCESS) as AppSection[]).filter((s) => canAccessSection(role, s));
 }
 

@@ -15,7 +15,7 @@ import AuditFindingCard, {
 } from "./components/AuditFindingCard";
 
 type AuditStatus = "ok" | "warning" | "error";
-type ModuleStatus = "operational" | "incomplete";
+type ModuleStatus = "operational" | "structure_ready" | "incomplete";
 
 interface ModuleDetail {
   module: string;
@@ -88,22 +88,36 @@ function getSessionToken(): string | null {
 
 function StatusPill({ status }: { status: ModuleStatus }) {
   const operational = status === "operational";
+  const structureReady = status === "structure_ready";
+
+  const label = operational
+    ? "Operacional"
+    : structureReady
+      ? "Estrutura pronta"
+      : "Incompleto";
+
+  const colors = operational
+    ? "bg-emerald-50 text-emerald-700"
+    : structureReady
+      ? "bg-blue-50 text-blue-700"
+      : "bg-amber-50 text-amber-700";
 
   return (
     <span
       className={[
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold",
-        operational
-          ? "bg-emerald-50 text-emerald-700"
-          : "bg-amber-50 text-amber-700",
+        colors,
       ].join(" ")}
     >
       {operational ? (
         <CheckCircle2 size={14} />
+      ) : structureReady ? (
+        <ShieldCheck size={14} />
       ) : (
         <AlertTriangle size={14} />
       )}
-      {operational ? "Operacional" : "Incompleto"}
+
+      {label}
     </span>
   );
 }
@@ -173,6 +187,10 @@ export default function MilAuditor() {
   const operationalCount = modules.filter(
     (item) => item.status === "operational"
   ).length;
+
+const structureReadyCount = modules.filter(
+  (item) => item.status === "structure_ready"
+).length;
 
   const incompleteCount = modules.filter(
     (item) => item.status === "incomplete"
@@ -272,10 +290,10 @@ const operationalFindings: AuditFinding[] = [
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Operacionais
+                Estrutura técnica pronta
               </p>
               <p className="mt-2 text-3xl font-bold text-emerald-600">
-                {operationalCount}
+                {structureReadyCount}
               </p>
             </div>
 

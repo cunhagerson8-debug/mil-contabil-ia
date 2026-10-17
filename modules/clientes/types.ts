@@ -35,6 +35,7 @@ export interface ClientHistoryEntry {
 export interface Client {
   id: string;
   companyId?: string; // vínculo opcional com empresa cadastrada no módulo Empresas
+  firmId?: string;
   nome: string;
   tipo: TipoCliente;
   documento: string; // CPF ou CNPJ

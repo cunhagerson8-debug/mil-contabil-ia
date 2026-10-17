@@ -193,6 +193,8 @@ checks.push({
         "SELECT COUNT(*)::text AS count FROM pg_policies WHERE schemaname = 'public'"
       );
 
+
+
       const policyCount = Number(result.rows[0]?.count ?? 0);
 
       checks.push({
@@ -235,6 +237,7 @@ checks.push({
       );
 
       checks.push({
+        
         name: "Planos comerciais",
         status: missingPlans.length === 0 ? "ok" : "warning",
         message:
@@ -274,6 +277,7 @@ checks.push({
         route: backendFileExists("routes/clients.routes.ts"),
       },
       {
+       
         name: "Escritórios Contábeis",
         table: "firms",
         repository: backendFileExists("repositories/firm.repository.ts"),
@@ -361,7 +365,7 @@ checks.push({
           service: module.service,
           controller: module.controller,
           api: module.route,
-          status: complete ? "operational" : "incomplete",
+          status: complete ? "structure_ready" : "incomplete",
         };
       });
 
@@ -371,10 +375,10 @@ checks.push({
 
       checks.push({
         name: "Diagnóstico de módulos",
-        status: incompleteModules.length === 0 ? "ok" : "warning",
+        status: "warning",
         message:
           incompleteModules.length === 0
-            ? "Todos os módulos analisados estão operacionais."
+            ? "Todos os módulos analisados possuem estrutura técnica completa, mas ainda precisam de validação funcional."
             : `${incompleteModules.length} módulo(s) ainda estão incompletos.`,
         details: moduleDiagnosis,
       });

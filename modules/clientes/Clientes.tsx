@@ -47,7 +47,7 @@ function ClientFormModal({
   const isEdit = !!initial;
   const [form, setForm] = useState<ClientFormState>(
     initial ? {
-      firmId: "",
+      firmId: initial.firmId ?? "",
       nome: initial.nome, tipo: initial.tipo, documento: initial.documento,
       servicosContratadosText: initial.servicosContratados.join("\n"),
     } : emptyForm
@@ -57,7 +57,7 @@ function ClientFormModal({
   const [firms, setFirms] = useState<Firm[]>([]);
 
   useEffect(() => {
-  if (isEdit) return;
+ 
 
   firmsApi.list()
     .then((data) => setFirms(data))
@@ -114,6 +114,8 @@ function ClientFormModal({
               <p className="text-sm text-red-700 font-medium">{error}</p>
             </div>
           )}
+
+         
 
           <div>
   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
