@@ -876,7 +876,7 @@ function AuthenticatedShell() {
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto pb-12">
+          <div className="w-full max-w-none pb-12">
             {activeSection === AppSection.DASHBOARD          && <Dashboard onNavigate={navigateTo} />}
             {activeSection === AppSection.EMPRESAS           && <PermissionGuard section={AppSection.EMPRESAS}><Empresas /></PermissionGuard>}
             {activeSection === AppSection.CLIENTES           && <PermissionGuard section={AppSection.CLIENTES}><Clientes /></PermissionGuard>}

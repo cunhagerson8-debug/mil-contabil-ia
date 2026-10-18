@@ -30,4 +30,7 @@ export interface Company {
   telefone: string;
   endereco: string;
   certificadoDigitalValidade?: string; // ISO date, alimenta Central de Alertas
+  certificadoDigitalTipo?: string;
+certificadoAutoridade?: string;
+certificadoResponsavel?: string;
 }

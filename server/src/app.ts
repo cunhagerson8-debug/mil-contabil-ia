@@ -9,6 +9,7 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { companiesRouter } from "./routes/companies.routes.js";
 import { clientsRouter } from "./routes/clients.routes.js";
+import { certificatesRouter } from "./routes/certificates.routes.js";
 import { invoicesRouter } from "./routes/invoices.routes.js";
 import { alertsRouter } from "./routes/alerts.routes.js";
 import { portalRouter } from "./routes/portal.routes.js";
@@ -36,6 +37,7 @@ export function createApp(): Application {
 
   app.use("/api/auth", authRouter);
   app.use("/api/companies", companiesRouter);
+  app.use("/api/certificates", certificatesRouter);
   app.use("/api/clients", clientsRouter);  
   app.use("/api/invoices", invoicesRouter);
   app.use("/api/alerts", alertsRouter);

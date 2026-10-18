@@ -84,7 +84,7 @@ export default function CompanyDrawer({
   const [activeTab, setActiveTab] = useState("geral");
 
   return (
-    <div className="p-4 md:p-8 animate-in fade-in duration-300">
+    <div className="w-full min-w-0 p-4 md:p-8 animate-in fade-in duration-300">
       <button
         onClick={onClose}
         className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors mb-4"
