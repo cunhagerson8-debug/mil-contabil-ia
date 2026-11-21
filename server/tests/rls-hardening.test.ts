@@ -20,6 +20,10 @@ const signedContextMigration = await readFile(
   new URL("../../database/migrations/019_signed_rls_context.sql", import.meta.url),
   "utf8",
 );
+const functionExecuteHardeningMigration = await readFile(
+  new URL("../../database/migrations/023_rls_function_execute_hardening.sql", import.meta.url),
+  "utf8",
+);
 const migrationRunner = await readFile(
   new URL("../scripts/run-migrations.mjs", import.meta.url),
   "utf8",
@@ -99,5 +103,30 @@ test("non-owner users cannot reassign client, company, or employee links", async
     assert.equal(connectCount, 0);
   } finally {
     (pool as unknown as { connect: typeof pool.connect }).connect = originalConnect;
+  }
+});
+test("RLS context functions restrict execution to mil_app", () => {
+  const functions = [
+    "app_current_user_id",
+    "app_current_firm_id",
+    "app_current_role",
+  ];
+
+  for (const fn of functions) {
+    assert.match(
+      functionExecuteHardeningMigration,
+      new RegExp(
+        `REVOKE\\s+EXECUTE\\s+ON\\s+FUNCTION\\s+public\\.${fn}\\(\\)\\s+FROM\\s+PUBLIC`,
+        "i",
+      ),
+    );
+
+    assert.match(
+      functionExecuteHardeningMigration,
+      new RegExp(
+        `GRANT\\s+EXECUTE\\s+ON\\s+FUNCTION\\s+public\\.${fn}\\(\\)\\s+TO\\s+mil_app`,
+        "i",
+      ),
+    );
   }
 });
