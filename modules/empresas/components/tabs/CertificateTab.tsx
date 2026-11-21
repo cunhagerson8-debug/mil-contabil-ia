@@ -1,331 +1,253 @@
-import { Company } from "../../types";
+import { useState } from "react";
+import type { Company } from "../../types";
 import { generateCertificatePDF } from "../../reports/GenerateCertificatePDF";
+import { analyzeCertificate, type CertificateStatus } from "../../services/CertificateAnalyzer";
 
 interface Props {
   company: Company;
 }
 
+type CertificateAction = "import" | "export" | "renew" | "save";
+
+const statusStyles: Record<CertificateStatus, string> = {
+  "Não cadastrado": "bg-slate-100 text-slate-700",
+  "Dados incompletos": "bg-amber-100 text-amber-800",
+  "Válido": "bg-green-100 text-green-800",
+  "Próximo do vencimento": "bg-amber-100 text-amber-800",
+  "Vencido": "bg-red-100 text-red-800",
+  "Revogado": "bg-red-100 text-red-800",
+};
+
+function formatDate(value: string | null): string {
+  if (!value) return "Não informada";
+
+  return new Date(`${value}T00:00:00.000Z`).toLocaleDateString("pt-BR", {
+    timeZone: "UTC",
+  });
+}
+
 export default function CertificateTab({ company }: Props) {
+  const [unavailableAction, setUnavailableAction] = useState<{
+    action: CertificateAction;
+    message: string;
+  } | null>(null);
+  const analysis = analyzeCertificate(company);
+
+  function reportUnavailable(action: CertificateAction, message: string) {
+    setUnavailableAction({ action, message });
+  }
+
   return (
     <div className="space-y-6">
-
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-bold">
-          🔐 Certificado Digital
-        </h2>
-
-<div className="rounded-xl border bg-white p-6 mb-6">
-  <h3 className="text-lg font-semibold mb-4">
-    📊 Situação do Certificado
-  </h3>
-
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-
-  <button className="rounded-lg border bg-white p-4 hover:bg-slate-50 transition">
-    📥
-    <div className="mt-2 text-sm font-medium">
-      Importar
-    </div>
-  </button>
-
-<button
-  onClick={() => generateCertificatePDF(company)}
-  className="rounded-lg border bg-white p-4 hover:bg-slate-50"
->
-  📄
-  <div className="mt-2 text-sm font-medium">
-    Relatório
-  </div>
-</button>
-
-  <button className="rounded-lg border bg-white p-4 hover:bg-slate-50 transition">
-    📤
-    <div className="mt-2 text-sm font-medium">
-      Exportar
-    </div>
-  </button>
-
-  <button className="rounded-lg border bg-violet-600 text-white p-4 hover:bg-violet-700 transition">
-    🔄
-    <div className="mt-2 text-sm font-medium">
-      Renovar
-    </div>
-  </button>
-
-</div>
-
-  <div className="grid grid-cols-2 gap-4">
-
-    <div>
-      <span className="text-gray-500 text-sm">Status</span>
-      <p className="font-semibold text-green-600">
-        Certificado Válido
-      </p>
-    </div>
-
-    <div>
-      <span className="text-gray-500 text-sm">Tipo</span>
-      <p>{company.certificadoDigitalTipo || "-"}</p>
-    </div>
-
-    <div>
-      <span className="text-gray-500 text-sm">Validade</span>
-      <p>{company.certificadoDigitalValidade || "-"}</p>
-    </div>
-
-    <div>
-      <span className="text-gray-500 text-sm">Autoridade</span>
-      <p>{company.certificadoAutoridade || "-"}</p>
-    </div>
-
-    <div>
-      <span className="text-gray-500 text-sm">Responsável</span>
-      <p>{company.certificadoResponsavel || "-"}</p>
-    </div>
-
-    <div>
-      <span className="text-gray-500 text-sm">Renovação</span>
-      <p className="text-blue-600 font-medium">
-        Monitoramento ativo
-      </p>
-    </div>
-
-  </div>
-</div>
-
-        <p className="text-slate-500 mt-2">
-          Gerenciamento completo dos certificados digitais da empresa.
+      <section className="rounded-xl border bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-bold">🔐 Certificado Digital</h2>
+        <p className="mt-2 text-slate-500">
+          Situação calculada a partir dos dados de validade disponíveis para esta empresa.
         </p>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-2 gap-6">
+      <section className="rounded-xl border bg-white p-6 shadow-sm">
+        <h3 className="mb-4 text-lg font-semibold">📊 Situação do Certificado</h3>
 
-        <div>
-          <label className="block text-sm font-medium mb-2">
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => reportUnavailable("import",
+              "Importação indisponível: o fluxo seguro de leitura e armazenamento do certificado ainda não está integrado. Nenhum arquivo foi enviado."
+            )}
+            className="rounded-lg border bg-white p-4 transition hover:bg-slate-50"
+          >
+            📥
+            <div className="mt-2 text-sm font-medium">Importar</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => generateCertificatePDF(company)}
+            className="rounded-lg border bg-white p-4 hover:bg-slate-50"
+          >
+            📄
+            <div className="mt-2 text-sm font-medium">Relatório</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => reportUnavailable("export",
+              "Exportação indisponível: ainda não há uma operação de exportação conectada."
+            )}
+            className="rounded-lg border bg-white p-4 transition hover:bg-slate-50"
+          >
+            📤
+            <div className="mt-2 text-sm font-medium">Exportar</div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => reportUnavailable("renew",
+              "Renovação indisponível: ainda não há uma operação de renovação conectada."
+            )}
+            className="rounded-lg border bg-violet-600 p-4 text-white transition hover:bg-violet-700"
+          >
+            🔄
+            <div className="mt-2 text-sm font-medium">Renovar</div>
+          </button>
+        </div>
+
+        {unavailableAction && unavailableAction.action !== "save" && (
+          <p role="alert" className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {unavailableAction.message}
+          </p>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <span className="text-sm text-gray-500">Status</span>
+            <p className={`mt-1 inline-block rounded-full px-3 py-1 font-semibold ${statusStyles[analysis.status]}`}>
+              {analysis.status}
+            </p>
+          </div>
+
+          <div>
+            <span className="text-sm text-gray-500">Tipo</span>
+            <p>{company.certificadoDigitalTipo?.trim() || "Não informado"}</p>
+          </div>
+
+          <div>
+            <span className="text-sm text-gray-500">Validade</span>
+            <p>{formatDate(analysis.validUntil)}</p>
+          </div>
+
+          {analysis.daysRemaining !== null && (
+            <div>
+              <span className="text-sm text-gray-500">Dias restantes</span>
+              <p>{analysis.daysRemaining}</p>
+            </div>
+          )}
+
+          {analysis.daysExpired !== null && (
+            <div>
+              <span className="text-sm text-gray-500">Dias desde o vencimento</span>
+              <p>{analysis.daysExpired}</p>
+            </div>
+          )}
+
+          <div>
+            <span className="text-sm text-gray-500">Autoridade</span>
+            <p>{company.certificadoAutoridade?.trim() || "Não informado"}</p>
+          </div>
+
+          <div>
+            <span className="text-sm text-gray-500">Responsável</span>
+            <p>{company.certificadoResponsavel?.trim() || "Não informado"}</p>
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm text-slate-600">{analysis.nextAction}</p>
+      </section>
+
+      <section className="rounded-xl border bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-semibold">Dados do Certificado</h3>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label className="block text-sm font-medium">
             Tipo
+            <select className="mt-2 w-full rounded-lg border p-3" defaultValue="A1">
+              <option>A1</option>
+              <option>A3</option>
+            </select>
           </label>
 
-          <select className="w-full rounded-lg border p-3">
-            <option>A1</option>
-            <option>A3</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium">
             Autoridade Certificadora
+            <input className="mt-2 w-full rounded-lg border p-3" placeholder="Ex.: Certisign" />
           </label>
 
-          <input
-            className="w-full rounded-lg border p-3"
-            placeholder="Ex.: Certisign"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium">
             Número de Série
+            <input className="mt-2 w-full rounded-lg border p-3" placeholder="Número do certificado" />
           </label>
 
-          <input
-            className="w-full rounded-lg border p-3"
-            placeholder="Número do certificado"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium">
             Responsável
+            <input className="mt-2 w-full rounded-lg border p-3" placeholder="Nome do responsável" />
           </label>
 
-          <input
-            className="w-full rounded-lg border p-3"
-            placeholder="Nome do responsável"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium">
             Data de Emissão
+            <input type="date" className="mt-2 w-full rounded-lg border p-3" />
           </label>
 
-          <input
-            type="date"
-            className="w-full rounded-lg border p-3"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2">
+          <label className="block text-sm font-medium">
             Data de Validade
+            <input type="date" className="mt-2 w-full rounded-lg border p-3" />
           </label>
-
-          <input
-            type="date"
-            className="w-full rounded-lg border p-3"
-          />
         </div>
 
-      </div>
-
-      <div className="rounded-xl border bg-slate-50 p-5">
-
-        <h3 className="font-semibold mb-3">
-          Status do Certificado
-        </h3>
-
-        <p>
-          🟢 Situação calculada automaticamente após salvar.
+        <p className="mt-4 rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
+          O cadastro ainda não está conectado ao serviço de certificados. Os dados preenchidos aqui
+          não são enviados nem persistidos.
         </p>
 
-      </div>
+        <button
+          type="button"
+          onClick={() => reportUnavailable("save",
+            "Cadastro não realizado: a gravação ainda não está conectada a esta tela. Nenhum dado foi enviado ou salvo."
+          )}
+          className="mt-5 rounded-lg bg-violet-600 px-6 py-3 font-semibold text-white hover:bg-violet-700"
+        >
+          Salvar Certificado
+        </button>
+        {unavailableAction?.action === "save" && (
+          <p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            {unavailableAction.message}
+          </p>
+        )}
+      </section>
 
-      <button className="rounded-lg bg-violet-600 px-6 py-3 text-white font-semibold hover:bg-violet-700">
-        Salvar Certificado
-      </button>
+      <section className="rounded-xl border bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-bold">📜 Histórico do Certificado</h3>
+        <p className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
+          O histórico real ainda não está integrado a esta tela. Nenhum evento simulado está sendo exibido.
+        </p>
+      </section>
 
-    {/* ===========================
-    HISTÓRICO DO CERTIFICADO
-=========================== */}
-
-<div className="rounded-xl border bg-white p-6 shadow-sm mt-6">
-  <div className="flex items-center gap-2 mb-2">
-    <span className="text-2xl">📜</span>
-
-    <div>
-      <h3 className="text-lg font-bold">
-        Histórico do Certificado
-      </h3>
-
-      <p className="text-sm text-slate-500">
-        Acompanhe todas as alterações realizadas neste certificado.
-      </p>
-    </div>
-  </div>
-
-  <div className="mt-6 space-y-4">
-
-    {/* Evento */}
-
-    <div className="flex items-start justify-between rounded-lg border p-4">
-      <div>
-        <p className="font-semibold text-green-600">
-          🟢 Certificado cadastrado
+      <section className="rounded-xl border bg-white p-6 shadow-sm">
+        <h3 className="text-lg font-bold">Análise da validade</h3>
+        <p className="mt-2 text-sm text-slate-500">
+          Análise local baseada nos dados disponíveis; não representa validação criptográfica do arquivo.
         </p>
 
-        <p className="text-sm text-slate-500">
-          Cadastro realizado com sucesso.
-        </p>
-      </div>
+        <div className="mt-4 space-y-3">
+          <div className={`rounded-lg p-3 ${statusStyles[analysis.status]}`}>
+            <p className="font-semibold">{analysis.status}</p>
+            {analysis.problems.length > 0 && (
+              <ul className="mt-2 list-inside list-disc text-sm">
+                {analysis.problems.map((problem) => <li key={problem}>{problem}</li>)}
+              </ul>
+            )}
+            {analysis.problems.length === 0 && (
+              <p className="mt-1 text-sm">A data de validade registrada ainda não expirou.</p>
+            )}
+          </div>
 
-      <span className="text-xs text-slate-400">
-        Hoje • 14:35
-      </span>
+          {analysis.daysRemaining !== null && (
+            <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+              Restam {analysis.daysRemaining} dias até {formatDate(analysis.validUntil)}.
+            </p>
+          )}
+
+          {analysis.daysExpired !== null && (
+            <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              A validade terminou há {analysis.daysExpired} dias.
+            </p>
+          )}
+
+          {analysis.recommendations.map((recommendation) => (
+            <p key={recommendation} className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              💡 {recommendation}
+            </p>
+          ))}
+        </div>
+      </section>
     </div>
-
-    {/* Evento */}
-
-    <div className="flex items-start justify-between rounded-lg border p-4">
-      <div>
-        <p className="font-semibold text-blue-600">
-          🔄 Certificado renovado
-        </p>
-
-        <p className="text-sm text-slate-500">
-          Renovação registrada no sistema.
-        </p>
-      </div>
-
-      <span className="text-xs text-slate-400">
-        15/06/2026
-      </span>
-    </div>
-
-    {/* Evento */}
-
-    <div className="flex items-start justify-between rounded-lg border p-4">
-      <div>
-        <p className="font-semibold text-amber-600">
-          ✏️ Responsável alterado
-        </p>
-
-        <p className="text-sm text-slate-500">
-          Dados do responsável atualizados.
-        </p>
-      </div>
-
-      <span className="text-xs text-slate-400">
-        10/06/2026
-      </span>
-    </div>
-
-    {/* Evento */}
-
-    <div className="flex items-start justify-between rounded-lg border p-4">
-      <div>
-        <p className="font-semibold text-slate-600">
-          ⬇️ Download realizado
-        </p>
-
-        <p className="text-sm text-slate-500">
-          Arquivo do certificado baixado.
-        </p>
-      </div>
-
-      <span className="text-xs text-slate-400">
-        05/06/2026
-      </span>
-    </div>
-
-<div className="rounded-xl border bg-white p-6 shadow-sm mt-6">
-  <div className="flex items-center gap-2 mb-4">
-    <span className="text-2xl">🤖</span>
-
-    <div>
-      <h3 className="text-lg font-bold">
-        Análise Inteligente da MIL IA
-      </h3>
-
-      <p className="text-sm text-slate-500">
-        Diagnóstico automático baseado nas informações do certificado.
-      </p>
-    </div>
-  </div>
-
-  <div className="space-y-3">
-
-    <div className="rounded-lg bg-green-50 border border-green-200 p-3">
-      <p className="font-semibold text-green-700">
-        ✅ Certificado válido
-      </p>
-      <p className="text-sm text-green-600">
-        Nenhum problema encontrado.
-      </p>
-    </div>
-
-    <div className="rounded-lg bg-blue-50 border border-blue-200 p-3">
-      <p className="font-semibold text-blue-700">
-        📅 Validade
-      </p>
-      <p className="text-sm text-blue-600">
-        Restam 284 dias para o vencimento.
-      </p>
-    </div>
-
-    <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
-      <p className="font-semibold text-amber-700">
-        💡 Recomendação
-      </p>
-      <p className="text-sm text-amber-600">
-        Iniciar a renovação 30 dias antes do vencimento.
-      </p>
-    </div>
-
-  </div>
-</div>
-
-  </div>
-  </div>
-</div>
   );
 }

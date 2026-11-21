@@ -1,7 +1,7 @@
 // =============================================================================
 // MIL CONTÁBIL IA — Architecture: Access Control
 // =============================================================================
-// Matriz de permissões (role -> seções acessíveis) e componentes de guarda de
+// Matriz de acesso-base (role -> seções acessíveis) e componentes de guarda de
 // rota/permissão. Espelha as RLS policies do banco (database/migrations/
 // 011_row_level_security.sql) na camada de UI: a policy do Postgres é a
 // fonte de verdade real (defesa em profundidade), este arquivo é a
@@ -15,7 +15,7 @@
 
 import React from "react";
 import { AppSection } from "../types";
-import { UserRole } from "../modules/auth/types";
+import { HrCompanyPermissionGrant, UserRole } from "../modules/auth/types";
 import { useAuth } from "../modules/auth/AuthContext";
 
 // -----------------------------------------------------------------------------
@@ -24,8 +24,8 @@ import { useAuth } from "../modules/auth/AuthContext";
 // Espelha o raciocínio das policies *_select / *_write_staff_only:
 //   firm_owner, accountant  → equivalentes a "staff" no banco (acesso amplo
 //                              ao firm, accountant sem billing/auditoria)
-//   company_manager/user    → equivalentes ao acesso via user_company_access
-//                              (Portal do Cliente apenas)
+//   company_manager/user    → Portal do Cliente; Gestão de RH depende ainda
+//                              de concessão específica por empresa.
 //   platform_admin          → BYPASSRLS no banco = acesso a tudo aqui também
 export const SECTION_ACCESS: Record<AppSection, UserRole[]> = {
   [AppSection.DASHBOARD]:           ["platform_admin", "firm_owner", "accountant", "company_manager", "company_user"],
@@ -46,9 +46,22 @@ export const SECTION_ACCESS: Record<AppSection, UserRole[]> = {
   [AppSection.ABERTURA_EMPRESA]:    ["platform_admin","firm_owner","accountant",],
   [AppSection.MIL_AUDITOR]: ["platform_admin"],
   [AppSection.ESCRITORIOS]: ["platform_admin"],
+  [AppSection.GESTAO_SITE]: ["platform_admin"],
 };
 
-export function canAccessSection(role: UserRole, section: AppSection): boolean {
+export function canAccessSection(
+  role: UserRole,
+  section: AppSection,
+  hrPermissions: HrCompanyPermissionGrant[] = [],
+): boolean {
+  if (
+    section === AppSection.FOLHA_PAGAMENTO
+    && (role === "company_manager" || role === "company_user")
+  ) {
+    return hrPermissions.some((grant) =>
+      grant.permissions.includes("employee.read")
+    );
+  }
   return SECTION_ACCESS[section]?.includes(role) ?? false;
 }
 
@@ -70,21 +83,23 @@ export const SECTION_LABELS: Record<AppSection, string> = {
   [AppSection.PERFIL]:              "Meu Perfil",
   [AppSection.FISCAL]:              "Fiscal e Contábil",
   [AppSection.CALCULATORS]:         "Calculadoras",
-  [AppSection.FOLHA_PAGAMENTO]:     "Folha de Pagamento",
+  [AppSection.FOLHA_PAGAMENTO]:     "Gestão de RH",
   [AppSection.NEWS]:                "Notícias Contábeis",
   [AppSection.AI_CHAT]:             "MIL IA Contábil",
   [AppSection.ABERTURA_EMPRESA]: "Abertura de Empresa",
   [AppSection.MIL_AUDITOR]:         "MIL Auditor",
   [AppSection.ESCRITORIOS]:         "Escritórios Contábeis",
+  [AppSection.GESTAO_SITE]:         "Gestão do Site",
 };
 
 
 /** Subconjunto de seções acessíveis a um role — usado para filtrar a navegação. */
-export function sectionsForRole(role: UserRole): AppSection[] {
- 
- 
-  
-  return (Object.keys(SECTION_ACCESS) as AppSection[]).filter((s) => canAccessSection(role, s));
+export function sectionsForRole(
+  role: UserRole,
+  hrPermissions: HrCompanyPermissionGrant[] = [],
+): AppSection[] {
+  return (Object.keys(SECTION_ACCESS) as AppSection[])
+    .filter((section) => canAccessSection(role, section, hrPermissions));
 }
 
 // -----------------------------------------------------------------------------
@@ -135,7 +150,7 @@ export function PermissionGuard({ section, children }: PermissionGuardProps) {
 
   if (!user) return null;
 
-  if (!canAccessSection(user.role, section)) {
+  if (!canAccessSection(user.role, section, user.hrPermissions)) {
     return (
       <div className="p-8 flex flex-col items-center justify-center min-h-[400px] text-center">
         <div className="p-4 bg-red-50 rounded-2xl mb-4">

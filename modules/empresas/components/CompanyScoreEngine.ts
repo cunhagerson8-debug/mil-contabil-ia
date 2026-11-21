@@ -1,4 +1,5 @@
 import { Company } from "../types";
+import { analyzeCertificate } from "../services/CertificateAnalyzer";
 
 export interface CompanyScore {
 
@@ -45,35 +46,9 @@ export function calculateCompanyScore(
     alerts.push("Endereço não informado.");
   }
 
-  if (!company.certificadoDigitalValidade) {
-
-    certificado = 0;
-
-    alerts.push("Certificado digital inexistente.");
-
-  } else {
-
-    const dias = Math.ceil(
-      (new Date(company.certificadoDigitalValidade).getTime() -
-        Date.now()) /
-      (1000 * 60 * 60 * 24)
-    );
-
-    if (dias < 0) {
-
-      certificado = 0;
-
-      alerts.push("Certificado vencido.");
-
-    } else if (dias < 30) {
-
-      certificado = 60;
-
-      alerts.push("Certificado vence em breve.");
-
-    }
-
-  }
+  const certificateAnalysis = analyzeCertificate(company);
+  certificado = certificateAnalysis.score;
+  alerts.push(...certificateAnalysis.problems);
 
   const score = Math.round(
 

@@ -31,6 +31,8 @@ export interface Company {
   endereco: string;
   certificadoDigitalValidade?: string; // ISO date, alimenta Central de Alertas
   certificadoDigitalTipo?: string;
-certificadoAutoridade?: string;
-certificadoResponsavel?: string;
+  certificadoAutoridade?: string;
+  certificadoResponsavel?: string;
+  certificadoDigitalCadastrado?: boolean;
+  certificadoDigitalRevogado?: boolean;
 }

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Users, Plus, Search, X, ShieldCheck, Mail, Phone,
   ChevronRight, Clock, Ban, CheckCircle2, MoreVertical, Building2, Loader2,
@@ -8,7 +8,14 @@ import { usersApi } from "../../services/usersApi";
 import { companiesApi } from "../../services/companiesApi";
 import { firmsApi, type Firm } from "../../services/firmsApi";
 import { Company } from "../empresas/types";
-import { ROLE_LABELS, USER_STATUS_LABELS, UserRole, UserStatus } from "../auth/types";
+import {
+  HR_PERMISSION_LABELS,
+  ROLE_LABELS,
+  USER_STATUS_LABELS,
+  HrPermission,
+  UserRole,
+  UserStatus,
+} from "../auth/types";
 import { useAuth } from "../auth/AuthContext";
 
 const STATUS_BADGE: Record<UserStatus, string> = {
@@ -47,6 +54,7 @@ function adaptUser(dto: any): ManagedUser {
     invitedBy: dto.invitedBy,
     companyAccess: dto.companyAccess ?? [],
     canManageCompanies: dto.canManageCompanies,
+    hrPermissions: dto.hrPermissions ?? [],
   };
 }
 
@@ -58,15 +66,80 @@ const UserDrawer = ({
   companies,
   onClose,
   canManage,
+  canManageHrPermissions,
+  detailError,
+  detailLoading,
 }: {
   managedUser: ManagedUser;
   companies: Company[];
   onClose: () => void;
   canManage: boolean;
+  canManageHrPermissions: boolean;
+  detailError: string | null;
+  detailLoading: boolean;
 }) => {
+  const [permissionsByCompany, setPermissionsByCompany] = useState<Record<string, HrPermission[]>>(
+    () => Object.fromEntries(
+      (managedUser.hrPermissions ?? []).map((grant) => [grant.companyId, grant.permissions]),
+    ),
+  );
+  const [savingCompanyId, setSavingCompanyId] = useState<string | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [permissionSaved, setPermissionSaved] = useState(false);
+  useEffect(() => {
+    setPermissionsByCompany(Object.fromEntries(
+      (managedUser.hrPermissions ?? []).map((grant) => [grant.companyId, grant.permissions]),
+    ));
+  }, [managedUser.id, managedUser.hrPermissions]);
+
   const userCompanies = (managedUser.companyAccess ?? [])
     .map((id) => companies.find((c) => c.id === id))
     .filter(Boolean);
+
+  async function saveHrPermissions(companyId: string) {
+    setSavingCompanyId(companyId);
+    setPermissionError(null);
+    setPermissionSaved(false);
+    try {
+      const result = await usersApi.replaceHrPermissions(
+        managedUser.id,
+        companyId,
+        permissionsByCompany[companyId] ?? [],
+      );
+      setPermissionsByCompany((current) => ({ ...current, [companyId]: result.permissions }));
+      setPermissionSaved(true);
+    } catch (error) {
+      setPermissionError(error instanceof Error ? error.message : "Não foi possível salvar as permissões de RH.");
+    } finally {
+      setSavingCompanyId(null);
+    }
+  }
+
+  function togglePermission(companyId: string, permission: HrPermission) {
+    setPermissionSaved(false);
+    setPermissionsByCompany((current) => {
+      const selected = new Set(current[companyId] ?? []);
+      if (selected.has(permission)) {
+        selected.delete(permission);
+        if (permission === "employee.read") {
+          selected.delete("employee.sensitive.read");
+          selected.delete("employee.documents.read");
+          selected.delete("employee.manage");
+          selected.delete("employee.documents.manage");
+        } else if (permission === "employee.sensitive.read") {
+          selected.delete("employee.manage");
+        } else if (permission === "employee.documents.read") {
+          selected.delete("employee.documents.manage");
+        }
+      } else {
+        selected.add(permission);
+        if (permission !== "employee.read") selected.add("employee.read");
+        if (permission === "employee.manage") selected.add("employee.sensitive.read");
+        if (permission === "employee.documents.manage") selected.add("employee.documents.read");
+      }
+      return { ...current, [companyId]: [...selected] };
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-sm" onClick={onClose}>
@@ -144,10 +217,65 @@ const UserDrawer = ({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-400">Sem restrição — acesso a todas as empresas do escritório.</p>
+                <p className="text-sm text-slate-400">
+                  {managedUser.role === "company_manager" || managedUser.role === "company_user"
+                    ? "Nenhuma empresa vinculada."
+                    : "Sem restrição — acesso a todas as empresas do escritório."}
+                </p>
               )}
             </div>
           )}
+
+          {canManageHrPermissions
+            && (managedUser.role === "company_manager" || managedUser.role === "company_user")
+            && (
+              <section className="pt-4 border-t border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  Permissões específicas de RH
+                </h4>
+                <p className="text-xs text-slate-500 mb-3">
+                  Vínculo com a empresa não concede acesso ao RH. As permissões abaixo valem somente para a empresa escolhida.
+                </p>
+                {detailError && <p className="text-sm text-red-600 mb-2">{detailError}</p>}
+                {permissionError && <p className="text-sm text-red-600 mb-2">{permissionError}</p>}
+                {permissionSaved && (
+                  <p className="text-sm text-emerald-700 mb-2">Permissões salvas. O usuário deverá entrar novamente para atualizar a navegação.</p>
+                )}
+                <div className="space-y-3">
+                  {companies.map((company) => {
+                    const selected = new Set(permissionsByCompany[company.id] ?? []);
+                    return (
+                      <div key={company.id} className="rounded-xl border border-slate-200 p-3">
+                        <p className="text-sm font-bold text-slate-800 mb-2">
+                          {company.nomeFantasia || company.razaoSocial}
+                        </p>
+                        <div className="space-y-2">
+                          {(Object.entries(HR_PERMISSION_LABELS) as [HrPermission, string][]).map(([permission, label]) => (
+                            <label key={permission} className="flex items-center gap-2 text-xs text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={selected.has(permission)}
+                                disabled={!!detailError || detailLoading || savingCompanyId !== null}
+                                onChange={() => togglePermission(company.id, permission)}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="mt-3 w-full rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                          disabled={!!detailError || detailLoading || savingCompanyId !== null}
+                          onClick={() => saveHrPermissions(company.id)}
+                        >
+                          {savingCompanyId === company.id ? "Salvando..." : "Salvar permissões"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
           {canManage && (
             <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
@@ -340,8 +468,29 @@ export default function Usuarios() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const detailRequestId = useRef(0);
 
   const canManage = user?.role === "firm_owner" || user?.role === "platform_admin";
+  const canManageHrPermissions = user?.role === "firm_owner";
+
+  async function openUser(user: ManagedUser) {
+    const requestId = ++detailRequestId.current;
+    setDetailError(null);
+    setDetailLoading(true);
+    setSelected(user);
+    try {
+      const details = await usersApi.getById(user.id);
+      if (requestId === detailRequestId.current) setSelected(adaptUser(details));
+    } catch {
+      if (requestId === detailRequestId.current) {
+        setDetailError("Não foi possível carregar os vínculos e permissões atuais deste usuário.");
+      }
+    } finally {
+      if (requestId === detailRequestId.current) setDetailLoading(false);
+    }
+  }
 
   const loadUsers = useCallback(async () => {
     try {
@@ -449,7 +598,7 @@ export default function Usuarios() {
         {filtered.map((u, idx) => (
           <button
             key={u.id}
-            onClick={() => setSelected(u)}
+            onClick={() => openUser(u)}
             className={`w-full text-left flex items-center justify-between p-5 hover:bg-slate-50 transition-colors ${idx !== filtered.length - 1 ? "border-b border-slate-100" : ""}`}
           >
             <div className="flex items-center gap-4">
@@ -481,7 +630,21 @@ export default function Usuarios() {
         )}
       </div>
 
-      {selected && <UserDrawer managedUser={selected} companies={companies} onClose={() => setSelected(null)} canManage={canManage} />}
+      {selected && (
+        <UserDrawer
+          managedUser={selected}
+          companies={companies}
+          onClose={() => {
+            detailRequestId.current += 1;
+            setDetailLoading(false);
+            setSelected(null);
+          }}
+          canManage={canManage}
+          canManageHrPermissions={canManageHrPermissions}
+          detailError={detailError}
+          detailLoading={detailLoading}
+        />
+      )}
       {showInvite && (
         <InviteUserModal
           onClose={() => setShowInvite(false)}

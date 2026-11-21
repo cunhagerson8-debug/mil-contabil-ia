@@ -2,19 +2,48 @@
 
 PostgreSQL · Shared Database + Shared Schema · Row-Level Security · Multi-tenant em dois níveis (`firm` → `company`)
 
-Ver decisão arquitetural completa em [`ARCHITECTURE.md`](./ARCHITECTURE.md). Este documento cobre o estado atual do schema após as migrations 001–012.
+Ver decisão arquitetural completa em [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+Este documento descreve as migrations 001–020. A aplicação de cada migration
+depende do ambiente; confira `schema_migrations` antes de qualquer operação.
+A migration 020 está preparada e não foi executada por esta alteração.
 
 ---
 
 ## 1. Como aplicar as migrations
 
+Use somente uma conexão administrativa de migração aprovada. A API usa
+`DATABASE_URL` para tráfego operacional e não deve receber privilégios de DDL.
+O runner da API exige `MIGRATIONS_DATABASE_URL` e não usa `DATABASE_URL`.
+
 ```bash
-for f in database/migrations/*.sql; do
-  psql "$DATABASE_URL" -f "$f"
-done
+cd server
+npm run migrate
 ```
 
-As migrations são sequenciais e idempotentes na ordem — não pulam números, não há `DOWN`/rollback automatizado nesta fase (schema inicial; rollback é feito restaurando backup ou via migration corretiva aditiva).
+Não execute migrations em um banco conectado sem autorização, backup e revisão
+do alvo. O runner executa **todas** as migrations pendentes em ordem, não apenas
+a última; confirme as dependências anteriores antes de aplicar migrations.
+020 depende das estruturas de RLS de 018 e do contexto assinado de 019. A
+migration 019 também exige `RLS_CONTEXT_SECRET` no ambiente do runner. As
+migrations são sequenciais; não há `DOWN`/rollback automatizado.
+O arquivo [`operations/rls_role_setup.sql`](./operations/rls_role_setup.sql)
+prepara memberships de login, mas não foi executado e não define credenciais.
+Para implantar 019, pause o tráfego tenant, aplique a migration e publique a
+versão da API que assina contextos antes de retomar. A API nova não deve operar
+contra helpers históricos: eles ainda confiam nos GUCs legados. A versão antiga
+após 019 falha fechada até ser substituída.
+
+A migration 020 move CPF e salário de `hr_employees` para
+`hr_employee_sensitive_data` dentro de uma transação e revoga a leitura ampla
+da tabela-base. O backend desta versão depende desse novo schema; por isso,
+não há compatibilidade de execução entre esta migration e a versão anterior da
+API. Em uma futura aplicação autorizada, pause o tráfego e pare a API local,
+aplique as migrations pendentes, publique o backend/frontend correspondentes e
+somente então retome o tráfego. Não deixe versões antiga e nova da API atenderem
+simultaneamente durante a mudança. O rollback manual está em
+[`operations/rollback_020_hr_permissions.sql`](./operations/rollback_020_hr_permissions.sql),
+fora do runner automático; ele exige que não haja concessões RH ativas e
+restaura CPF/salário sem reabrir o acesso de portal.
 
 | # | Arquivo | Conteúdo |
 |---|---|---|
@@ -30,10 +59,18 @@ As migrations são sequenciais e idempotentes na ordem — não pulam números, 
 | 010 | `audit_log.sql` | `audit_logs` + triggers genéricos e dedicados |
 | 011 | `row_level_security.sql` | RLS + 41 policies + roles de banco (`mil_app`, `mil_platform_admin`) |
 | 012 | `seed_roles_and_plans.sql` | Catálogo inicial de planos comerciais |
+| 013 | `tax_obligations_deleted_at.sql` | Exclusão lógica de obrigações |
+| 014 | `tax_obligations_new_schema.sql` | Compatibilidade do novo esquema fiscal |
+| 015 | `hr_management.sql` | Tabelas de RH |
+| 016 | `user_invitations.sql` | Convites e ativação de usuários |
+| 017 | `hr_company_access.sql` | RLS de RH por empresa e grants operacionais |
+| 018 | `rls_policy_hardening.sql` | Restringe policies, exclusões, alterações de vínculos, guias, alertas e auditoria |
+| 019 | `signed_rls_context.sql` | Contexto HMAC ligado à transação, funções RLS verificadoras e atribuição segura de ator na auditoria |
+| 020 | `hr_permissions.sql` | Permissões RH por usuário/empresa e separação de CPF/salário sob RLS; preparada, não executada nesta alteração |
 
 ---
 
-## 2. Tabelas (23) e domínio
+## 2. Tabelas (31 após a migration 020) e domínio
 
 | Domínio | Tabelas |
 |---|---|
@@ -46,6 +83,8 @@ As migrations são sequenciais e idempotentes na ordem — não pulam números, 
 | **Portal do Cliente** | `portal_documents`, `portal_guides`, `portal_messages` |
 | **Billing da plataforma** | `plans`, `subscriptions`, `platform_invoices`, `usage_counters` |
 | **Auditoria** | `audit_logs` |
+| **Gestão de RH** | `hr_departments`, `hr_employees`, `hr_employee_sensitive_data`, `hr_employee_documents`, `hr_vacations`, `hr_leaves`, `user_company_hr_permissions` |
+| **Convites** | `user_invitations` |
 
 ## 3. Relacionamentos principais (43 foreign keys no total)
 
@@ -91,13 +130,20 @@ Ver diagrama completo (Mermaid) em [`erd/erd.mmd`](./erd/erd.mmd).
 - **Senha**: nunca em texto puro. `password_hash` armazena hash (bcrypt/argon2 calculado na aplicação). `auth_provider` suporta SSO/social (`google`, `microsoft`, `saml`) — quando não é `'password'`, `password_hash` pode ser `NULL` (`CHECK` constraint garante consistência).
 - **MFA**: `mfa_enabled` + `mfa_secret` (TOTP), secret cifrado pela aplicação antes de persistir.
 - **Sessão longa**: `refresh_tokens` guarda apenas o **hash** do refresh token, nunca o token em claro — mesmo princípio do password.
-- **Contexto de sessão para RLS**: a aplicação executa, no início de cada transação:
-  ```sql
-  SET LOCAL app.current_user_id = '<uuid>';
-  SET LOCAL app.current_firm_id = '<uuid ou NULL>';
-  SET LOCAL app.current_role    = '<role>';
-  ```
-  Essas variáveis (lidas via `current_setting()`, encapsuladas nas funções `app_current_user_id()`, `app_current_firm_id()`, `app_current_role()`) são a única fonte de verdade para as policies — `SET LOCAL` garante que não escapam da transação atual, mesmo com connection pooling.
+- **Contexto de sessão para RLS**: após autenticar o usuário e revalidar no
+  banco seu estado, escritório e papel, o backend assina esses claims com
+  `RLS_CONTEXT_SECRET`, vinculando o token ao PID da conexão e ao ID da
+  transação PostgreSQL. Ele envia o token a
+  `app_private.set_rls_context($1)`. As funções
+  `app_current_user_id()`, `app_current_firm_id()` e `app_current_role()`
+  retornam valores somente depois de verificar HMAC, expiração e vínculo à
+  transação. As policies não confiam mais nos GUCs legados
+  `app.current_user_id`, `app.current_firm_id` ou `app.current_role`.
+- `SET LOCAL`/`set_config` limitam escopo e vazamento em pools, mas **não são
+  mecanismos de autenticação**: GUCs customizados podem ser alterados por
+  SQL executado como a role conectada. Contextos forjados ou expirados falham
+  fechados. A chave deve ser aleatória, exclusiva por ambiente, independente
+  de `JWT_SECRET` e conter pelo menos 32 bytes.
 
 ## 5. Roles (papéis de usuário — coluna `role`, enum `user_role`)
 
@@ -109,7 +155,22 @@ Ver diagrama completo (Mermaid) em [`erd/erd.mmd`](./erd/erd.mmd).
 | **Company Manager** (`company_manager`) | Empresa(s) vinculada(s) em `user_company_access` | Portal do Cliente com permissão de gestão: lê dados da própria empresa, envia mensagens, marca guias como pagas (`can_manage = true`). |
 | **Company User** (`company_user`) | Empresa(s) vinculada(s) | Portal do Cliente, leitura/operação limitada (`can_manage = false` — aplicação esconde ações de gestão). |
 
-Distinção de role de **banco** (Postgres) vs role de **aplicação** (enum `user_role`): só existem dois roles de banco (`mil_app`, usado por todo tráfego autenticado; `mil_platform_admin`, com `BYPASSRLS`). O enum `user_role` é quem decide *o que* cada policy libera dentro do role `mil_app`.
+Distinção de role de **banco** (Postgres) vs role de **aplicação** (enum
+`user_role`): a API usa pools e logins separados. O pool operacional assume
+`mil_app` dentro de cada transação tenant e exige `session_user =
+mil_app_login`, login `NOINHERIT` sem memberships adicionais, e role efetiva
+não-superuser, sem `BYPASSRLS`, memberships ou propriedade de tabelas protegidas.
+O pool administrativo assume `mil_platform_admin` somente dentro de uma
+transação privilegiada e revalidada; essa role tem `BYPASSRLS`, não é login nem
+superuser. O login deve ser `mil_platform_login`, `NOINHERIT` e membro somente
+de `mil_platform_admin`. Nunca configure `DATABASE_URL` com um login
+administrativo.
+`mil_context_owner` é `NOLOGIN`, `NOINHERIT`, sem `BYPASSRLS` e sem memberships;
+possui somente o schema privado de verificação e a chave HMAC, sem tabelas de
+negócio. A migration 019 recebe a chave por bind parametrizado do runner e a
+persiste sem conceder acesso a `mil_app`. Não altere a chave sem procedimento
+de rotação coordenado.
+O enum `user_role` determina *o que* cada policy libera dentro de `mil_app`.
 
 ---
 
@@ -125,11 +186,18 @@ O tenant raiz é o **escritório contábil** (`firm`), não a empresa-cliente. U
 ### Como isso é aplicado
 
 - RLS **habilitado em todas as 23 tabelas**.
-- 41 policies cobrindo `SELECT`/`INSERT`/`UPDATE`/`DELETE` conforme a tabela.
-- Tabelas sem `firm_id` direto (`company_partners`, `digital_certificates`, `client_contacts`, `client_documents`, `client_history_entries`, `invoice_items`, `portal_documents`, `portal_guides`, `portal_messages`, `user_company_access`, `refresh_tokens`) usam `EXISTS` contra a tabela pai para herdar o isolamento — nunca duplicam `firm_id` redundantemente quando o JOIN ascendente já garante o filtro.
+- RLS habilitado nas tabelas definidas pelas migrations 011, 015 e 016.
+- Policies cobrem `SELECT`/`INSERT`/`UPDATE`/`DELETE` conforme a tabela; a migration 017 subdivide o acesso às tabelas de RH por empresa.
+- Tabelas sem `firm_id` direto (`company_partners`, `digital_certificates`, `client_contacts`, `client_documents`, `client_history_entries`, `invoice_items`, `portal_documents`, `portal_guides`, `portal_messages`, `user_company_access`, `refresh_tokens`, `user_invitations`, `hr_employee_documents`, `hr_vacations`, `hr_leaves`) usam `EXISTS` contra a tabela pai para herdar o isolamento — nunca duplicam `firm_id` redundantemente quando o JOIN ascendente já garante o filtro.
 - **Falha seca por padrão**: RLS nega por padrão qualquer linha sem policy explícita — um bug de aplicação não pode "esquecer o WHERE" e expor dados de outro tenant, porque o banco filtra independentemente da query.
 - `plans` é a única tabela deliberadamente global (catálogo comercial, sem isolamento por firm).
 - Tabelas de billing (`subscriptions`, `platform_invoices`, `usage_counters`, `audit_logs`) são visíveis apenas a `firm_owner` — `accountant` não vê o que o escritório paga à plataforma nem o log de auditoria completo.
+- A integração de dois escritórios está em
+  `server/tests/rls-context.integration.test.ts`. Ela é ignorada na suíte
+  padrão; só roda com URLs fornecidas explicitamente e recusa qualquer host
+  fora de loopback, banco diferente de `mil_contabil_teste`, porta diferente
+  de `5434` ou login diferente de `mil_app_login`/`mil_platform_login`.
+  Quando autorizada e executada, cria fixtures fictícias e as remove ao final.
 
 ---
 
@@ -181,6 +249,10 @@ database/
 ├── README.md                    # este arquivo
 ├── erd/
 │   └── erd.mmd                  # Entity Relationship Diagram (Mermaid)
+├── operations/
+│   ├── rls_role_setup.sql       # memberships preparadas (não executadas)
+│   ├── rls_isolation_test.sql   # adulteração GUC/token e falha fechada
+│   └── rls_login_role_check.sql # valida logins/roles por conexão local
 └── migrations/
     ├── 001_extensions_and_enums.sql
     ├── 002_firms_and_users.sql
@@ -193,5 +265,12 @@ database/
     ├── 009_subscriptions_and_billing.sql
     ├── 010_audit_log.sql
     ├── 011_row_level_security.sql
-    └── 012_seed_roles_and_plans.sql
+    ├── 012_seed_roles_and_plans.sql
+    ├── 013_tax_obligations_deleted_at.sql
+    ├── 014_tax_obligations_new_schema.sql
+    ├── 015_hr_management.sql
+    ├── 016_user_invitations.sql
+    ├── 017_hr_company_access.sql
+    ├── 018_rls_policy_hardening.sql
+    └── 019_signed_rls_context.sql
 ```
