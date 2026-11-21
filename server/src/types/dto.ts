@@ -5,6 +5,7 @@
 // depender do código do frontend — são contratos publicados
 // independentemente, e o frontend é apenas um dos consumidores possíveis.
 // =============================================================================
+import type { HrCompanyPermissionGrant } from "./hr-permissions.js";
 
 export type RegimeTributario = "Simples Nacional" | "Lucro Presumido" | "Lucro Real" | "MEI";
 export type StatusEmpresa = "Ativa" | "Inativa" | "Em Abertura" | "Em Encerramento";
@@ -99,6 +100,24 @@ export interface ClientDto {
   historico: ClientHistoryEntryDto[];
 }
 
+export type CommercialLeadStatus = "new" | "contacting" | "qualified" | "converted" | "closed";
+export type CommercialLeadInterest = "software_subscription" | "accounting_services" | "both" | "undecided";
+
+export interface CommercialLeadDto {
+  id: string;
+  name: string;
+  whatsapp: string;
+  email: string | null;
+  serviceInterest: CommercialLeadInterest;
+  voluntaryDetails: string | null;
+  consentedAt: string;
+  consentVersion: string;
+  status: CommercialLeadStatus;
+  lastContactedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ClientCreateInput {
   firmId?: string;
   companyId?: string;
@@ -164,6 +183,7 @@ export interface AuthUserDto {
   lastLoginAt?: string;
   companyAccess?: string[];
   canManageCompanies?: boolean;
+  hrPermissions?: HrCompanyPermissionGrant[];
 }
 
 export interface ManagedUserDto {
@@ -183,6 +203,7 @@ export interface ManagedUserDto {
   invitedBy?: string;
   companyAccess?: string[];
   canManageCompanies?: boolean;
+  hrPermissions?: HrCompanyPermissionGrant[];
 }
 
 export interface LoginInput {

@@ -2,7 +2,7 @@
 // Repository: Users (autenticação e consulta)
 // =============================================================================
 import { PoolClient } from "pg";
-import { UserRowWithFirm, UserCompanyAccessRow } from "../types/db.js";
+import { UserCompanyHrPermissionRow, UserRowWithFirm, UserCompanyAccessRow } from "../types/db.js";
 
 const SELECT_WITH_FIRM = `
   SELECT u.*, f.name AS firm_name
@@ -39,6 +39,19 @@ export const userRepository = {
   async findCompanyAccess(client: PoolClient, userId: string): Promise<UserCompanyAccessRow[]> {
     const result = await client.query<UserCompanyAccessRow>(
       `SELECT user_id, company_id, can_manage FROM user_company_access WHERE user_id = $1`,
+      [userId]
+    );
+    return result.rows;
+  },
+
+  async findHrPermissions(client: PoolClient, userId: string): Promise<UserCompanyHrPermissionRow[]> {
+    const result = await client.query<UserCompanyHrPermissionRow>(
+      `SELECT user_id, company_id, can_read_employees, can_read_sensitive_data,
+              can_read_documents, can_manage_employees, can_manage_documents,
+              granted_by, granted_at, updated_at
+       FROM user_company_hr_permissions
+       WHERE user_id = $1
+       ORDER BY company_id`,
       [userId]
     );
     return result.rows;

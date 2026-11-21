@@ -1,8 +1,9 @@
-import { pool } from "../db/pool.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { milAuditorSummaryService, type ExecutiveSummary } from "./mil-auditor-summary.service.js";
-import { TenantContext } from "../db/withTenantContext.js";
+import { TenantContext, withPlatformReadOnlyContext } from "../db/withTenantContext.js";
+import { aiContextRepository } from "../repositories/ai-context.repository.js";
+import { ForbiddenError } from "../utils/errors.js";
 
 export type { ExecutivePriority, ExecutiveSummary } from "./mil-auditor-summary.service.js";
 
@@ -37,6 +38,9 @@ const EXPECTED_MIGRATIONS = [
   "012_seed_roles_and_plans.sql",
   "013_tax_obligations_deleted_at.sql",
   "014_tax_obligations_new_schema.sql",
+  "015_hr_management.sql",
+  "016_user_invitations.sql",
+  "017_hr_company_access.sql",
 ];
 
 const ESSENTIAL_TABLES = [
@@ -94,7 +98,7 @@ checks.push({
 
     // 1. Banco de dados
     try {
-      await pool.query("SELECT 1");
+      await withAuthorizedPlatformRead(ctx, (client) => client.query("SELECT 1"));
 
       checks.push({
         name: "Banco de dados",
@@ -114,8 +118,10 @@ checks.push({
 
     // 2. Migrations
     try {
-      const result = await pool.query<{ filename: string }>(
-        "SELECT filename FROM schema_migrations ORDER BY filename"
+      const result = await withAuthorizedPlatformRead(ctx, (client) =>
+        client.query<{ filename: string }>(
+          "SELECT filename FROM schema_migrations ORDER BY filename"
+        )
       );
 
       const applied = result.rows.map((row) => row.filename);
@@ -152,12 +158,12 @@ checks.push({
 
     // 3. Tabelas essenciais
     try {
-      const result = await pool.query<{ table_name: string }>(
-        `
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-        `
+      const result = await withAuthorizedPlatformRead(ctx, (client) =>
+        client.query<{ table_name: string }>(`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+        `)
       );
 
       const existingTables = result.rows.map((row) => row.table_name);
@@ -189,8 +195,10 @@ checks.push({
 
     // 4. Row Level Security
     try {
-      const result = await pool.query<{ count: string }>(
-        "SELECT COUNT(*)::text AS count FROM pg_policies WHERE schemaname = 'public'"
+      const result = await withAuthorizedPlatformRead(ctx, (client) =>
+        client.query<{ count: string }>(
+          "SELECT COUNT(*)::text AS count FROM pg_policies WHERE schemaname = 'public'"
+        )
       );
 
 
@@ -219,8 +227,10 @@ checks.push({
 
     // 5. Planos comerciais
     try {
-      const result = await pool.query<{ code: string }>(
-        "SELECT code FROM plans WHERE is_active = true ORDER BY code"
+      const result = await withAuthorizedPlatformRead(ctx, (client) =>
+        client.query<{ code: string }>(
+          "SELECT code FROM plans WHERE is_active = true ORDER BY code"
+        )
       );
 
       const plans = result.rows.map((row) => row.code);
@@ -336,12 +346,12 @@ checks.push({
     ];
 
     try {
-      const tableResult = await pool.query<{ table_name: string }>(
-        `
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-        `
+      const tableResult = await withAuthorizedPlatformRead(ctx, (client) =>
+        client.query<{ table_name: string }>(`
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = 'public'
+        `)
       );
 
       const existingTables = new Set(
@@ -422,6 +432,21 @@ checks.push({
       executiveSummary,
     };
   }
+}
+
+function withAuthorizedPlatformRead<T>(
+  ctx: TenantContext,
+  query: (client: import("pg").PoolClient) => Promise<T>
+): Promise<T> {
+  if (ctx.role !== "platform_admin" || ctx.firmId !== null) {
+    throw new ForbiddenError("Somente platform_admin pode executar a auditoria global.");
+  }
+  return withPlatformReadOnlyContext(async (client) => {
+    if (!(await aiContextRepository.assertPlatformAdmin(client, ctx.userId))) {
+      throw new ForbiddenError("Usuário não autorizado como platform_admin.");
+    }
+    return query(client);
+  });
 }
 
 export const milAuditorService = new MilAuditorService();

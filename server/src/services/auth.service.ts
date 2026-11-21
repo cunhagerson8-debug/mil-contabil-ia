@@ -15,19 +15,29 @@ import { toAuthUserDto } from "../mappers/user.mapper.js";
 import { LoginInput, RegisterInput, AuthSessionDto } from "../types/dto.js";
 import { UnauthorizedError, ConflictError } from "../utils/errors.js";
 import { env } from "../config/env.js";
+import type { PoolClient } from "pg";
+import type { UserRoleDb } from "../types/db.js";
 
 interface JwtPayload {
   sub: string;       // user id
   firmId: string | null;
-  role: string;
+  role: UserRoleDb;
+  sessionVersion: number;
 }
+
+const USER_ROLES = new Set<UserRoleDb>([
+  "platform_admin",
+  "firm_owner",
+  "accountant",
+  "company_manager",
+  "company_user",
+]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const authService = {
   async login(input: LoginInput): Promise<AuthSessionDto> {
-    // Login roda com withPlatformContext (BYPASSRLS) porque o usuário ainda
-    // não está autenticado — não há app.current_firm_id de sessão ainda.
-    // Esta é a ÚNICA operação de autenticação que legitimamente ignora RLS;
-    // tudo que vem depois do login usa withTenantContext normalmente.
+    // Login precisa localizar a identidade antes de conhecer seu escritório;
+    // a consulta é restrita por e-mail e usa a conexão administrativa isolada.
     const user = await withPlatformContext((client) => userRepository.findByEmailAnyFirm(client, input.email));
 
     if (!user || !user.password_hash) {
@@ -36,8 +46,8 @@ export const authService = {
     if (user.status === "suspended") {
       throw new UnauthorizedError("Esta conta está suspensa. Contate o administrador do escritório.");
     }
-    if (user.status === "deactivated") {
-      throw new UnauthorizedError("Esta conta foi desativada.");
+    if (user.status !== "active") {
+      throw new UnauthorizedError("Esta conta não está ativa.");
     }
 
     const passwordMatches = await bcrypt.compare(input.password, user.password_hash);
@@ -45,14 +55,22 @@ export const authService = {
       throw new UnauthorizedError("E-mail ou senha incorretos.");
     }
 
-    const companyAccess = await withPlatformContext((client) => userRepository.findCompanyAccess(client, user.id));
+    const { companyAccess, hrPermissions } = await withPlatformContext(async (client) => ({
+      companyAccess: await userRepository.findCompanyAccess(client, user.id),
+      hrPermissions: await userRepository.findHrPermissions(client, user.id),
+    }));
     await withPlatformContext((client) => userRepository.updateLastLogin(client, user.id));
 
-    const token = signToken({ sub: user.id, firmId: user.firm_id, role: user.role });
+    const token = signToken({
+      sub: user.id,
+      firmId: user.firm_id,
+      role: user.role,
+      sessionVersion: user.session_version,
+    });
     const expiresAt = new Date(Date.now() + parseExpiryMs(env.jwtExpiresIn)).toISOString();
 
     return {
-      user: toAuthUserDto({ ...user, last_login_at: new Date().toISOString() }, companyAccess),
+      user: toAuthUserDto({ ...user, last_login_at: new Date().toISOString() }, companyAccess, hrPermissions),
       token,
       expiresAt,
     };
@@ -60,18 +78,37 @@ export const authService = {
 
   /**
    * Usado pelo middleware de auth para reconstruir o usuário a partir do
-   * token em cada requisição. Roda com o próprio contexto de tenant do
-   * usuário (não withPlatformContext) — é uma leitura de dados já
-   * autenticados, então passa pelo RLS normalmente como qualquer outra
-   * query autenticada.
+   * token em cada requisição. Usuários de escritório são consultados no
+   * contexto RLS do token; platform_admin é revalidado pela conexão
+   * administrativa. Status, escritório e role atuais precisam coincidir
+   * com as claims assinadas.
    */
-  async getUserById(userId: string, firmId: string | null, role: string): Promise<AuthSessionDto["user"] | null> {
-    return withTenantContext({ userId, firmId, role }, async (client) => {
+  async getUserById(
+    userId: string,
+    firmId: string | null,
+    role: string,
+    sessionVersion?: number,
+  ): Promise<AuthSessionDto["user"] | null> {
+    const lookup = async (client: PoolClient) => {
       const user = await userRepository.findById(client, userId);
-      if (!user) return null;
+      if (
+        !user
+        || user.status !== "active"
+        || user.firm_id !== firmId
+        || user.role !== role
+        || (sessionVersion !== undefined && user.session_version !== sessionVersion)
+      ) return null;
       const companyAccess = await userRepository.findCompanyAccess(client, userId);
-      return toAuthUserDto(user, companyAccess);
-    });
+      const hrPermissions = await userRepository.findHrPermissions(client, userId);
+      return toAuthUserDto(user, companyAccess, hrPermissions);
+    };
+
+    if (role === "platform_admin") {
+      if (firmId !== null) return null;
+      return withPlatformContext(lookup);
+    }
+    if (!firmId) return null;
+    return withTenantContext({ userId, firmId, role }, lookup);
   },
 
   async register(input: RegisterInput): Promise<AuthSessionDto> {
@@ -120,7 +157,12 @@ export const authService = {
 
       const companyAccess = await userRepository.findCompanyAccess(client, user.id);
       const authUser = toAuthUserDto(user, companyAccess);
-      const token = signToken({ sub: user.id, firmId: user.firm_id, role: user.role });
+      const token = signToken({
+        sub: user.id,
+        firmId: user.firm_id,
+        role: user.role,
+        sessionVersion: 0,
+      });
       const expiresAt = new Date(Date.now() + parseExpiryMs(env.jwtExpiresIn)).toISOString();
 
       return {
@@ -131,26 +173,30 @@ export const authService = {
     });
   },
 
-  /**
-   * Por segurança, não revela se o e-mail existe ou não — mesma resposta
-   * em ambos os casos (mitiga enumeração de contas). A implementação real
-   * de envio de e-mail (token de reset, expiração, link assinado) fica fora
-   * do escopo desta service; aqui só validamos e simulamos o agendamento.
-   * TODO produção: gerar token de reset com expiração curta, persistir hash
-   * do token (nunca o token em claro) em uma tabela password_reset_tokens,
-   * e disparar e-mail via provedor transacional (SES, Postmark, etc.).
-   */
-  async requestPasswordReset(email: string): Promise<{ sent: boolean }> {
-    const user = await withPlatformContext((client) => userRepository.findByEmailAnyFirm(client, email));
-    if (user) {
-      // eslint-disable-next-line no-console
-      console.log(`[auth] Solicitação de redefinição de senha para ${email} (user ${user.id}) — envio de e-mail não implementado nesta versão.`);
-    }
-    return { sent: true };
-  },
-
   verifyToken(token: string): JwtPayload {
-    return jwt.verify(token, env.jwtSecret) as JwtPayload;
+    const payload = jwt.verify(token, env.jwtSecret);
+    if (
+      typeof payload === "string"
+      || typeof payload.sub !== "string"
+      || !UUID_PATTERN.test(payload.sub)
+      || typeof payload.role !== "string"
+      || !USER_ROLES.has(payload.role as UserRoleDb)
+      || (payload.firmId !== null && (typeof payload.firmId !== "string" || !UUID_PATTERN.test(payload.firmId)))
+      || (payload.role === "platform_admin" ? payload.firmId !== null : !payload.firmId)
+      || (
+        payload.sessionVersion !== undefined
+        && (typeof payload.sessionVersion !== "number" || !Number.isSafeInteger(payload.sessionVersion) || payload.sessionVersion < 0)
+      )
+    ) {
+      throw new UnauthorizedError("Token inválido ou expirado.");
+    }
+
+    return {
+      sub: payload.sub,
+      firmId: payload.firmId as string | null,
+      role: payload.role as UserRoleDb,
+      sessionVersion: typeof payload.sessionVersion === "number" ? payload.sessionVersion : 0,
+    };
   },
 };
 

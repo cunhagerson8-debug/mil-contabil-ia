@@ -17,6 +17,14 @@ export interface FirmRow {
   deleted_at: Date | null;
 }
 
+export interface FirmIdentityRow {
+  id: string;
+  name: string;
+  trade_name: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+}
+
 export interface CreateFirmInput {
   name: string;
   trade_name?: string | null;
@@ -119,6 +127,24 @@ export async function findFirmById(
         created_at,
         updated_at,
         deleted_at
+      FROM firms
+      WHERE id = $1
+        AND deleted_at IS NULL
+      LIMIT 1
+    `,
+    [firmId]
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function findFirmIdentity(
+  client: PoolClient,
+  firmId: string,
+): Promise<FirmIdentityRow | null> {
+  const result = await client.query<FirmIdentityRow>(
+    `
+      SELECT id, name, trade_name, logo_url, primary_color
       FROM firms
       WHERE id = $1
         AND deleted_at IS NULL

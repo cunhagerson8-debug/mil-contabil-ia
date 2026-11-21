@@ -1,10 +1,12 @@
-import { pool } from "../db/pool.js";
+import { withPlatformContext } from "../db/withTenantContext.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 async function recalculateObligationStatuses(): Promise<void> {
   try {
-    await pool.query("SELECT recalculate_obligation_statuses();");
+    await withPlatformContext((client) =>
+      client.query("SELECT recalculate_obligation_statuses();")
+    );
 
     console.log(
       "[obligation-status-job] Status das obrigações recalculados com sucesso."

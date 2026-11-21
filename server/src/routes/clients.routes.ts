@@ -14,4 +14,4 @@ clientsRouter.get("/:id", clientsController.getById);
 
 clientsRouter.post("/", requireRole("platform_admin", "firm_owner", "accountant"), clientsController.create);
 clientsRouter.put("/:id", requireRole("platform_admin", "firm_owner", "accountant"), clientsController.update);
-clientsRouter.delete("/:id", requireRole("platform_admin", "firm_owner", "accountant"), clientsController.remove);
+clientsRouter.delete("/:id", requireRole("platform_admin", "firm_owner"), clientsController.remove);

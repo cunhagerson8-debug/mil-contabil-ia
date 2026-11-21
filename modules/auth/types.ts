@@ -11,6 +11,26 @@ export type UserRole =
   | "company_manager"
   | "company_user";
 
+export type HrPermission =
+  | "employee.read"
+  | "employee.sensitive.read"
+  | "employee.documents.read"
+  | "employee.manage"
+  | "employee.documents.manage";
+
+export interface HrCompanyPermissionGrant {
+  companyId: string;
+  permissions: HrPermission[];
+}
+
+export const HR_PERMISSION_LABELS: Record<HrPermission, string> = {
+  "employee.read": "Consultar dados básicos",
+  "employee.sensitive.read": "Consultar CPF e salário",
+  "employee.documents.read": "Consultar documentos",
+  "employee.manage": "Cadastrar e editar colaboradores",
+  "employee.documents.manage": "Gerenciar documentos",
+};
+
 export interface RegisterFirmInput {
   name: string;
   tradeName?: string;
@@ -76,6 +96,8 @@ export interface AuthUser {
   companyAccess?: string[];
   /** Se true, dentro das empresas de companyAccess o usuário pode realizar ações de gestão (espelha user_company_access.can_manage). */
   canManageCompanies?: boolean;
+  /** Company-scoped RH grants; UI hint only, backend/RLS remain authoritative. */
+  hrPermissions?: HrCompanyPermissionGrant[];
 }
 
 export interface LoginCredentials {

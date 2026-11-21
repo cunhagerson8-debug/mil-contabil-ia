@@ -26,8 +26,14 @@ export const registerSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email("E-mail inválido."),
-});
+  email: z.string().trim().max(254).email("E-mail inválido."),
+}).strict();
+
+export const resetPasswordSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Este link é inválido ou expirou."),
+  password: z.string().min(8, "Senha deve ter pelo menos 8 caracteres.")
+    .max(72, "Senha deve ter no máximo 72 caracteres."),
+}).strict();
 
 const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Convite inválido.");
 

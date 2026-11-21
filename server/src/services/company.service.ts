@@ -129,6 +129,10 @@ export const companyService = {
   },
 
   async update(ctx: TenantContext, id: string, input: CompanyUpdateInput): Promise<CompanyDto> {
+    if (input.contadorResponsavelId !== undefined && ctx.role !== "firm_owner") {
+      throw new ForbiddenError("Somente firm_owner pode alterar o contador responsável pela empresa.");
+    }
+
     return withTenantContext(ctx, async (client) => {
       const current = await companyRepository.findById(client, id);
       if (!current) throw new NotFoundError("Empresa", id);

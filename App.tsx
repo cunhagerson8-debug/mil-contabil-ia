@@ -16,7 +16,16 @@ import {
 import { AppSection } from "./types";
 
 // ── Auth & access control ────────────────────────────────────────────────────
-import { AuthProvider, useAuth, LoginPage, ForgotPasswordPage, RegisterPage, PerfilPage, InviteAcceptPage } from "./modules/auth";
+import {
+  AuthProvider,
+  useAuth,
+  LoginPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  RegisterPage,
+  PerfilPage,
+  InviteAcceptPage,
+} from "./modules/auth";
 import { ProtectedRoute, PermissionGuard, sectionsForRole, filterByCompanyAccess, SECTION_LABELS, canAccessSection } from "./architecture/access-control";
 import { obligationsByStatus, alertsByCategory, monthlyRevenueTrend } from "./architecture/dashboard-data";
 
@@ -39,6 +48,9 @@ import News            from "./modules/news/News";
 import AIChatSection   from "./modules/ai-chat/AIChatSection";
 import MilAuditor from "./modules/mil-auditor/MilAuditor";
 import Escritorios from "./modules/escritorios/Escritorios";
+import PublicLandingPage from "./modules/public-site/PublicLandingPage";
+import GestaoSite from "./modules/gestao-site/GestaoSite";
+import FirmBrandMark from "./modules/branding/FirmBrandMark";
 
 // ── Dados reais via API ─────────────────────────────────────────────────────
 // Todos os módulos (Empresas, Clientes, Obrigações, Notas Fiscais, Alertas,
@@ -54,6 +66,7 @@ import { Company } from "./modules/empresas/types";
 import { Client } from "./modules/clientes/types";
 import { TaxObligation } from "./modules/obrigacoes-fiscais/types";
 import { integrationStatusList } from "./architecture/integrations";
+import { getMyFirmIdentity, FirmIdentity } from "./services/firmIdentityApi";
 
 // =============================================================================
 // Navigation structure
@@ -91,10 +104,11 @@ function useNavItems(): NavItem[] {
     { id: AppSection.NEWS,               label: SECTION_LABELS[AppSection.NEWS],               icon: Newspaper,       group: "legacy" },
     { id: AppSection.MIL_AUDITOR, label: SECTION_LABELS[AppSection.MIL_AUDITOR], icon: ShieldCheck, group: "admin" },
     { id: AppSection.ESCRITORIOS, label: SECTION_LABELS[AppSection.ESCRITORIOS], icon: Building2, group: "admin" },
+    { id: AppSection.GESTAO_SITE, label: SECTION_LABELS[AppSection.GESTAO_SITE], icon: Globe, group: "admin" },
   ];
 
   if (!user) return [];
-  const allowed = new Set(sectionsForRole(user.role));
+  const allowed = new Set(sectionsForRole(user.role, user.hrPermissions));
   return allItems.filter((item) => allowed.has(item.id));
 }
 
@@ -628,11 +642,41 @@ const Dashboard = ({ onNavigate }: { onNavigate: (s: AppSection, opts?: { openCr
 
 function AuthenticatedShell() {
   const { user, logout } = useAuth();
+  const [firmIdentity, setFirmIdentity] = useState<FirmIdentity | null>(null);
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.DASHBOARD);
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [autoOpenInvoiceForm, setAutoOpenInvoiceForm] = useState(false);
   const [rawAlerts, setRawAlerts] = useState<any[]>([]);
   const navItems = useNavItems();
+  const isPlatformAdmin = user?.role === "platform_admin";
+  const firmDisplayName = isPlatformAdmin
+    ? "MIL Contábil IA"
+    : firmIdentity?.tradeName?.trim()
+      || firmIdentity?.name?.trim()
+      || user?.firmName?.trim()
+      || "Escritório";
+
+  useEffect(() => {
+    let active = true;
+    setFirmIdentity(null);
+
+    if (!user || isPlatformAdmin || !user.firmId) {
+      return () => { active = false; };
+    }
+
+    getMyFirmIdentity()
+      .then((identity) => {
+        if (active) setFirmIdentity(identity);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          console.error("Não foi possível carregar a identidade do escritório.", error);
+          setFirmIdentity(null);
+        }
+      });
+
+    return () => { active = false; };
+  }, [user?.id, user?.firmId, user?.role, isPlatformAdmin]);
 
   // Load alert count for topbar bell badge
   useEffect(() => {
@@ -671,37 +715,34 @@ function AuthenticatedShell() {
         transition-transform duration-300 lg:relative lg:translate-x-0
         ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
-        {/* Logo */}
-        <div className="flex items-center justify-between">
-  <div>
-    <div className="flex items-center gap-3 mb-1">
-
-      <img
-        src="/images/logo-mil-contabil-ia.png"
-        alt="MIL Contábil IA"
-        className="w-14 h-14 object-contain"
-      />
-
-      <div>
-        <h2 className="font-black text-slate-900 text-xl leading-none">
-          MIL <span className="text-blue-600">Contábil</span>{" "}
-          <span className="text-amber-500">IA</span>
-        </h2>
-
-        <p className="text-[10px] text-slate-400 font-semibold">
-          Uma solução da MIL Gestão &amp; Tecnologia
-        </p>
-      </div>
-
-    </div>
-  </div>
-
-  <button
-    onClick={() => setSidebarOpen(false)}
-  >
-    <X size={16} />
-  </button>
-</div>
+        <div className="flex min-h-[76px] items-center justify-between gap-2 border-b border-slate-100 px-3 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <FirmBrandMark
+              firmId={isPlatformAdmin ? null : user?.firmId ?? null}
+              name={firmDisplayName}
+              logoUrl={firmIdentity?.logoUrl}
+              primaryColor={firmIdentity?.primaryColor}
+              officialMil={isPlatformAdmin}
+              size="sidebar"
+            />
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-black leading-tight text-slate-900">
+                {firmDisplayName}
+              </h2>
+              <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                Tecnologia MIL Contábil IA
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            aria-label="Fechar menu"
+            onClick={() => setSidebarOpen(false)}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 lg:hidden"
+          >
+            <X size={16} />
+          </button>
+        </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-4">
@@ -855,10 +896,18 @@ function AuthenticatedShell() {
               onClick={() => navigateTo(AppSection.PERFIL)}
               className="hidden sm:flex items-center gap-2.5 hover:bg-slate-50 rounded-xl pl-1 pr-2 py-1 -my-1 transition-colors"
             >
+              <FirmBrandMark
+                firmId={isPlatformAdmin ? null : user.firmId}
+                name={firmDisplayName}
+                logoUrl={firmIdentity?.logoUrl}
+                primaryColor={firmIdentity?.primaryColor}
+                officialMil={isPlatformAdmin}
+                size="header"
+              />
               <div className="text-right">
-                <p className="text-sm font-bold text-slate-800">{user.fullName.split(" ").slice(0, 2).join(" ")}</p>
-                <p className="text-[10px] text-blue-600 font-black uppercase tracking-tighter">
-                  {user.firmName ?? "MIL Gestão"}
+                <p className="max-w-40 truncate text-sm font-bold text-slate-800">{firmDisplayName}</p>
+                <p className="text-[10px] text-blue-600 font-semibold">
+                  {user.fullName.split(" ").slice(0, 2).join(" ")}
                 </p>
               </div>
               <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
@@ -894,6 +943,7 @@ function AuthenticatedShell() {
             {activeSection === AppSection.AI_CHAT            && <PermissionGuard section={AppSection.AI_CHAT}><AIChatSection /></PermissionGuard>}
             {activeSection === AppSection.MIL_AUDITOR        && <PermissionGuard section={AppSection.MIL_AUDITOR}><MilAuditor /></PermissionGuard>}
             {activeSection === AppSection.ESCRITORIOS         && <PermissionGuard section={AppSection.ESCRITORIOS}><Escritorios /></PermissionGuard>}
+            {activeSection === AppSection.GESTAO_SITE         && <PermissionGuard section={AppSection.GESTAO_SITE}><GestaoSite /></PermissionGuard>}
           </div>
         </div>
       </main>
@@ -905,13 +955,31 @@ function AuthenticatedShell() {
 // Public (unauthenticated) flow: login <-> forgot password
 // =============================================================================
 
-function PublicFlow({ notice }: { notice?: string | null }) {
-  const [screen, setScreen] = useState<"login" | "forgot" | "register">("login");
+function PublicFlow({
+  notice,
+  showLogin,
+}: {
+  notice?: string | null;
+  showLogin?: boolean;
+}) {
+  const [screen, setScreen] = useState<"home" | "login" | "forgot" | "register">(
+    notice || showLogin ? "login" : "home",
+  );
+
+  if (screen === "home") {
+    return (
+      <PublicLandingPage
+        onLogin={() => setScreen("login")}
+        onRegister={() => setScreen("register")}
+      />
+    );
+  }
+
   return screen === "login"
-    ? <LoginPage notice={notice} onForgotPassword={() => setScreen("forgot")} onRegister={() => setScreen("register")} />
+    ? <LoginPage notice={notice} onBackToHome={() => setScreen("home")} onForgotPassword={() => setScreen("forgot")} onRegister={() => setScreen("register")} />
     : screen === "forgot"
       ? <ForgotPasswordPage onBackToLogin={() => setScreen("login")} />
-      : <RegisterPage onBackToLogin={() => setScreen("login")} />;
+      : <RegisterPage onBackToHome={() => setScreen("home")} onBackToLogin={() => setScreen("login")} />;
 }
 
 // =============================================================================
@@ -931,10 +999,24 @@ const INITIAL_INVITE_TOKEN: string | null = (() => {
   return token;
 })();
 
+const INITIAL_PASSWORD_RESET_TOKEN: string | null = (() => {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#/redefinir-senha?")) return null;
+
+  const query = hash.slice(hash.indexOf("?") + 1);
+  const token = new URLSearchParams(query).get("token");
+  if (token) {
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }
+  return token;
+})();
+
 function AppGate() {
   const { logout } = useAuth();
   const [inviteToken, setInviteToken] = useState<string | null>(INITIAL_INVITE_TOKEN);
+  const [passwordResetToken, setPasswordResetToken] = useState<string | null>(INITIAL_PASSWORD_RESET_TOKEN);
   const [notice, setNotice] = useState<string | null>(null);
+  const [showLogin, setShowLogin] = useState(INITIAL_INVITE_TOKEN !== null);
 
   if (inviteToken !== null) {
     return (
@@ -945,13 +1027,32 @@ function AppGate() {
           setNotice("Sua conta foi ativada com sucesso. Você já pode entrar com seu e-mail e a senha criada.");
           setInviteToken(null);
         }}
-        onCancel={() => setInviteToken(null)}
+        onCancel={() => {
+          setShowLogin(true);
+          setInviteToken(null);
+        }}
+      />
+    );
+  }
+
+  if (passwordResetToken !== null) {
+    return (
+      <ResetPasswordPage
+        token={passwordResetToken}
+        onResetComplete={() => {
+          setNotice("Sua senha foi redefinida. Entre novamente com a nova senha.");
+          setShowLogin(true);
+        }}
+        onBackToLogin={() => {
+          setPasswordResetToken(null);
+          setShowLogin(true);
+        }}
       />
     );
   }
 
   return (
-    <ProtectedRoute fallback={<PublicFlow notice={notice} />}>
+    <ProtectedRoute fallback={<PublicFlow notice={notice} showLogin={showLogin} />}>
       <AuthenticatedShell />
     </ProtectedRoute>
   );

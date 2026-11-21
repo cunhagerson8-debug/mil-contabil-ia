@@ -12,3 +12,8 @@ usersRouter.get("/:id", userManagementController.getById);
 usersRouter.post("/invite", userManagementController.invite);
 usersRouter.patch("/:id/status", userManagementController.updateStatus);
 usersRouter.patch("/:id/role", userManagementController.updateRole);
+usersRouter.put(
+  "/:id/companies/:companyId/hr-permissions",
+  requireRole("firm_owner"),
+  userManagementController.replaceHrPermissions,
+);

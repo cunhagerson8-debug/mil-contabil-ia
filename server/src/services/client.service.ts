@@ -100,6 +100,10 @@ if (!ctx.firmId) {
   },
 
   async update(ctx: TenantContext, id: string, input: ClientUpdateInput): Promise<ClientDto> {
+    if (input.companyId !== undefined && ctx.role !== "firm_owner") {
+      throw new ForbiddenError("Somente firm_owner pode alterar o vínculo do cliente com uma empresa.");
+    }
+
     return withTenantContext(ctx, async (client) => {
       const current = await clientRepository.findById(client, id);
       if (!current) throw new NotFoundError("Cliente", id);

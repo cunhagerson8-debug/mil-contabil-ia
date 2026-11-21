@@ -4,7 +4,7 @@
 // Valida o JWT do header Authorization e popula req.tenantContext — usado
 // por TODAS as rotas autenticadas para montar o TenantContext que
 // withTenantContext() exige. Sem este middleware, nenhuma rota de negócio
-// tem como saber app.current_firm_id / app.current_user_id / app.current_role.
+// pode obter o contexto autenticado.
 // =============================================================================
 import { Request, Response, NextFunction } from "express";
 import { authService } from "../services/auth.service.js";
@@ -28,15 +28,26 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
   }
 
   const token = header.slice("Bearer ".length);
+  let payload: ReturnType<typeof authService.verifyToken>;
   try {
-    const payload = authService.verifyToken(token);
-    req.tenantContext = {
-      userId: payload.sub,
-      firmId: payload.firmId,
-      role: payload.role,
-    };
-    next();
+    payload = authService.verifyToken(token);
   } catch {
     next(new UnauthorizedError("Token inválido ou expirado."));
+    return;
   }
+
+  void authService.getUserById(payload.sub, payload.firmId, payload.role, payload.sessionVersion).then((user) => {
+    if (!user || user.status !== "active") {
+      next(new UnauthorizedError("A sessão não é mais válida."));
+      return;
+    }
+
+    req.tenantContext = {
+      userId: user.id,
+      firmId: user.firmId,
+      role: user.role,
+      hrPermissions: user.hrPermissions,
+    };
+    next();
+  }).catch((error: unknown) => next(error));
 }

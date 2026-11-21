@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, Loader2, MailCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
 import { useAuth } from "./AuthContext";
 
 interface ForgotPasswordPageProps {
@@ -9,12 +9,23 @@ interface ForgotPasswordPageProps {
 export default function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPageProps) {
   const { requestPasswordReset, isSubmitting } = useAuth();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [accepted, setAccepted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const result = await requestPasswordReset(email);
-    if (result.sent) setSent(true);
+    setError(null);
+    try {
+      const result = await requestPasswordReset(email);
+      if (result.accepted) setAccepted(true);
+      else setError("Não foi possível registrar a solicitação. Tente novamente mais tarde.");
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Não foi possível registrar a solicitação. Tente novamente mais tarde.",
+      );
+    }
   }
 
   return (
@@ -45,11 +56,11 @@ export default function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPage
             <ArrowLeft size={14} /> Voltar para o login
           </button>
 
-          {!sent ? (
+          {!accepted ? (
             <>
               <h2 className="text-lg font-bold text-slate-800 mb-1">Recuperar senha</h2>
               <p className="text-sm text-slate-500 mb-6">
-                Informe o e-mail da sua conta. Enviaremos um link para redefinir sua senha.
+                Informe o e-mail usado na plataforma. Se houver uma conta associada, um link poderá ser enviado após o processamento.
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -62,11 +73,21 @@ export default function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPage
                     required
                     autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      setError(null);
+                    }}
                     placeholder="seu.email@escritorio.com.br"
+                    maxLength={254}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400"
                   />
                 </div>
+
+                {error && (
+                  <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm leading-5 text-rose-800">
+                    {error}
+                  </p>
+                )}
 
                 <button
                   type="submit"
@@ -84,14 +105,14 @@ export default function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPage
               </form>
             </>
           ) : (
-            <div className="text-center py-4">
-              <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <MailCheck size={26} className="text-emerald-600" />
+            <div className="text-center py-4" role="status" aria-live="polite">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50">
+                <CheckCircle2 size={26} className="text-emerald-600" />
               </div>
-              <h2 className="text-lg font-bold text-slate-800 mb-2">Verifique seu e-mail</h2>
+              <h2 className="text-lg font-bold text-slate-800 mb-2">Solicitação recebida</h2>
               <p className="text-sm text-slate-500 mb-6">
-                Se houver uma conta associada a <span className="font-bold text-slate-700">{email}</span>, enviamos
-                um link de recuperação. Verifique também a caixa de spam.
+                Se houver uma conta associada a este endereço, um link poderá ser enviado após o processamento.
+                Se não receber instruções, verifique a caixa de spam ou tente novamente mais tarde.
               </p>
               <button
                 onClick={onBackToLogin}
@@ -104,7 +125,7 @@ export default function ForgotPasswordPage({ onBackToLogin }: ForgotPasswordPage
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6">
-          Ambiente de demonstração — nenhum e-mail real é enviado.
+          Por segurança, não informamos se um e-mail possui cadastro na plataforma.
         </p>
       </div>
     </div>

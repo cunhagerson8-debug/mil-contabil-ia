@@ -26,6 +26,7 @@ export enum AppSection {
   ABERTURA_EMPRESA = "ABERTURA_EMPRESA",
   MIL_AUDITOR = "MIL_AUDITOR",
   ESCRITORIOS = "ESCRITORIOS",
+  GESTAO_SITE = "GESTAO_SITE",
 }
 
 // -----------------------------------------------------------------------------

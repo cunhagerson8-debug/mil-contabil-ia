@@ -1,21 +1,19 @@
 import React, { useState } from "react";
-import { Eye, EyeOff, Loader2, AlertCircle, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "./AuthContext";
-import { mockUsers, MOCK_PASSWORD } from "./mockUsers";
-import { ROLE_LABELS } from "./types";
 
 interface LoginPageProps {
+  onBackToHome: () => void;
   onForgotPassword: () => void;
   onRegister: () => void;
   notice?: string | null;
 }
 
-export default function LoginPage({ onForgotPassword, onRegister, notice }: LoginPageProps) {
+export default function LoginPage({ onBackToHome, onForgotPassword, onRegister, notice }: LoginPageProps) {
   const { login, isSubmitting, error, clearError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showDemoPanel, setShowDemoPanel] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,12 +23,6 @@ export default function LoginPage({ onForgotPassword, onRegister, notice }: Logi
     } catch {
       // erro já fica disponível via context (error) — sem necessidade de tratamento aqui
     }
-  }
-
-  function fillDemoUser(demoEmail: string) {
-    setEmail(demoEmail);
-    setPassword(MOCK_PASSWORD);
-    setShowDemoPanel(false);
   }
 
   return (
@@ -60,6 +52,14 @@ export default function LoginPage({ onForgotPassword, onRegister, notice }: Logi
       </p>
 
     </div>
+
+    <button
+      type="button"
+      onClick={onBackToHome}
+      className="mb-4 inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-bold text-blue-700 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+    >
+      ← Voltar à página inicial
+    </button>
 
     {/* Card */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
@@ -155,45 +155,10 @@ export default function LoginPage({ onForgotPassword, onRegister, notice }: Logi
             </button>
           </div>
 
-          {/* Demo / mock auth helper panel */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={() => setShowDemoPanel((s) => !s)}
-              className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-600"
-            >
-              <ShieldCheck size={14} />
-              {showDemoPanel ? "Ocultar contas de demonstração" : "Ver contas de demonstração (mock)"}
-            </button>
-
-            {showDemoPanel && (
-              <div className="mt-4 space-y-2">
-                {mockUsers.map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => fillDemoUser(u.email)}
-                    className="w-full text-left flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 rounded-xl transition-colors"
-                  >
-                    <div>
-                      <p className="text-xs font-bold text-slate-700">{u.fullName}</p>
-                      <p className="text-[10px] text-slate-400">{u.email}</p>
-                    </div>
-                    <span className="text-[9px] font-black uppercase px-2 py-1 rounded-lg bg-blue-50 text-blue-700 shrink-0 ml-2">
-                      {ROLE_LABELS[u.role]}
-                    </span>
-                  </button>
-                ))}
-                <p className="text-[10px] text-slate-400 text-center pt-1">
-                  Senha de demonstração para todas as contas: <code className="font-mono font-bold">{MOCK_PASSWORD}</code>
-                </p>
-              </div>
-            )}
-          </div>
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-6">
-          Ambiente de demonstração — autenticação mock, sem dados reais.
+          Acesso ao MIL Contábil IA.
         </p>
       </div>
     </div>

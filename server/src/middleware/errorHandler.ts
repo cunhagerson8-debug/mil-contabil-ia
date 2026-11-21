@@ -19,6 +19,7 @@ const STATUS_BY_ERROR_NAME: Record<string, number> = {
   ValidationError: 400,
   UnauthorizedError: 401,
   ForbiddenError: 403,
+  ServiceUnavailableError: 503,
 };
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {

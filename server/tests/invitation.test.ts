@@ -8,10 +8,12 @@ import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 
 process.env.DATABASE_URL = "postgres://test:test@localhost:5432/test";
+process.env.ADMIN_DATABASE_URL = "postgres://admin-test:admin-test@localhost:5432/test";
 process.env.JWT_SECRET = "test-secret";
+process.env.RLS_CONTEXT_SECRET = "rls-context-test-secret-0123456789abcdef";
 process.env.GEMINI_API_KEY = "test-gemini";
 
-const { pool } = await import("../src/db/pool.js");
+const { adminPool } = await import("../src/db/pool.js");
 const { invitationService } = await import("../src/services/invitation.service.js");
 const { acceptInvitationSchema } = await import("../src/validators/auth.validators.js");
 const { errorHandler } = await import("../src/middleware/errorHandler.js");
@@ -35,6 +37,24 @@ function makeClient() {
       executedParams.push(params);
       const s = sql.replace(/\s+/g, " ").trim();
       if (s === "BEGIN") { undo.length = 0; return { rows: [], rowCount: 0 }; }
+      if (s === "SET LOCAL ROLE mil_platform_admin") return { rows: [], rowCount: 0 };
+      if (s.startsWith("SELECT session_user AS session_user_name")) {
+        return {
+          rows: [{
+            session_user_name: "mil_platform_login",
+            session_can_login: true,
+            session_superuser: false,
+            session_bypassrls: false,
+            session_inherit: false,
+            session_has_unexpected_privileged_membership: false,
+            session_has_unexpected_membership: false,
+            effective_role: "mil_platform_admin",
+            rolsuper: false,
+            rolbypassrls: true,
+          }],
+          rowCount: 1,
+        };
+      }
       if (s === "COMMIT") { undo.length = 0; return { rows: [], rowCount: 0 }; }
       if (s === "ROLLBACK") { while (undo.length) undo.pop()!(); return { rows: [], rowCount: 0 }; }
 
@@ -76,7 +96,7 @@ function makeClient() {
   };
 }
 
-(pool as unknown as { connect: () => Promise<unknown> }).connect = async () => makeClient();
+(adminPool as unknown as { connect: () => Promise<unknown> }).connect = async () => makeClient();
 
 let token = "";
 function seed(overrides: Partial<Inv> = {}) {

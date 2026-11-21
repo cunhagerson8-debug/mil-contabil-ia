@@ -3,9 +3,11 @@
 // =============================================================================
 import { Request, Response, NextFunction } from "express";
 import { authService } from "../services/auth.service.js";
+import { passwordResetService } from "../services/passwordReset.service.js";
 import { invitationService } from "../services/invitation.service.js";
 import {
-  loginSchema, registerSchema, forgotPasswordSchema, validateInvitationSchema, acceptInvitationSchema,
+  loginSchema, registerSchema, forgotPasswordSchema, resetPasswordSchema,
+  validateInvitationSchema, acceptInvitationSchema,
 } from "../validators/auth.validators.js";
 import { UnauthorizedError } from "../utils/errors.js";
 
@@ -33,8 +35,18 @@ export const authController = {
   async forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { email } = forgotPasswordSchema.parse(req.body);
-      const result = await authService.requestPasswordReset(email);
-      res.json(result);
+      const result = await passwordResetService.requestPasswordReset(email);
+      res.status(202).json(result);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { token, password } = resetPasswordSchema.parse(req.body);
+      await passwordResetService.resetPassword(token, password);
+      res.json({ reset: true });
     } catch (err) {
       next(err);
     }

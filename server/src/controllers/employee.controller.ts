@@ -9,6 +9,13 @@ import {
 } from "express";
 
 import { employeeService } from "../services/employee.service.js";
+import {
+  createEmployeeSchema,
+  employeeIdSchema,
+  listEmployeeDepartmentsQuerySchema,
+  listEmployeesQuerySchema,
+  updateEmployeeSchema,
+} from "../validators/employee.validators.js";
 
 export const employeeController = {
   async list(
@@ -17,20 +24,7 @@ export const employeeController = {
     next: NextFunction
   ): Promise<void> {
     try {
-      const filters = {
-        companyId:
-          typeof req.query.companyId === "string"
-            ? req.query.companyId
-            : undefined,
-        status:
-          typeof req.query.status === "string"
-            ? req.query.status
-            : undefined,
-        search:
-          typeof req.query.search === "string"
-            ? req.query.search
-            : undefined,
-      };
+      const filters = listEmployeesQuerySchema.parse(req.query);
 
       const employees = await employeeService.list(
         req.tenantContext!,
@@ -38,6 +32,23 @@ export const employeeController = {
       );
 
       res.json({ employees });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async listDepartments(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { companyId } = listEmployeeDepartmentsQuerySchema.parse(req.query);
+      const departments = await employeeService.listDepartments(
+        req.tenantContext!,
+        companyId
+      );
+      res.json({ departments });
     } catch (err) {
       next(err);
     }
@@ -51,7 +62,7 @@ export const employeeController = {
     try {
       const employee = await employeeService.getById(
         req.tenantContext!,
-        req.params.id
+        employeeIdSchema.parse(req.params.id)
       );
 
       res.json({ employee });
@@ -68,7 +79,7 @@ export const employeeController = {
     try {
       const employee = await employeeService.create(
         req.tenantContext!,
-        req.body
+        createEmployeeSchema.parse(req.body)
       );
 
       res.status(201).json({ employee });
@@ -85,8 +96,8 @@ export const employeeController = {
     try {
       const employee = await employeeService.update(
         req.tenantContext!,
-        req.params.id,
-        req.body
+        employeeIdSchema.parse(req.params.id),
+        updateEmployeeSchema.parse(req.body)
       );
 
       res.json({ employee });
@@ -103,7 +114,7 @@ export const employeeController = {
     try {
       const result = await employeeService.remove(
         req.tenantContext!,
-        req.params.id
+        employeeIdSchema.parse(req.params.id)
       );
 
       res.json(result);

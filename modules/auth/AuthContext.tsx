@@ -1,6 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { AuthSession, AuthUser, LoginCredentials, RegisterInput, UserRole } from "./types";
-import { realLogin, realRegister, realRequestPasswordReset, AuthError } from "./realAuth";
+import {
+  realLogin,
+  realRegister,
+  realRequestPasswordReset,
+  realResetPassword,
+  AuthError,
+} from "./realAuth";
 import { setApiAuthToken } from "../../services/apiClient";
 
 // =============================================================================
@@ -30,7 +36,8 @@ interface AuthContextValue {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (input: RegisterInput) => Promise<void>;
   logout: () => void;
-  requestPasswordReset: (email: string) => Promise<{ sent: boolean }>;
+  requestPasswordReset: (email: string) => Promise<{ accepted: boolean }>;
+  resetPassword: (token: string, password: string) => Promise<void>;
   clearError: () => void;
   /** Permissão: o usuário atual pode acessar a seção/feature dada? Ver guards.tsx para a matriz completa. */
   hasRole: (...roles: UserRole[]) => boolean;
@@ -114,6 +121,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const resetPassword = useCallback(async (token: string, password: string) => {
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await realResetPassword(token, password);
+    } catch (e) {
+      setError(e instanceof AuthError ? e.message : "Não foi possível redefinir a senha. Tente novamente.");
+      throw e;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   const hasRole = useCallback(
@@ -145,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     logout,
     requestPasswordReset,
+    resetPassword,
     clearError,
     hasRole,
     canAccessCompany,

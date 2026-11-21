@@ -11,8 +11,8 @@
 // lugar. Isso garante que a senha "demo1234" realmente funciona contra
 // authService.login() sem depender de um hash calculado manualmente.
 //
-// Uso (após rodar run-migrations.mjs):
-//   DATABASE_URL=postgresql://... node scripts/seed-demo-data.mjs
+// Uso deliberadamente restrito a uma base vazia de demonstração:
+//   DEMO_SEED_DATABASE_URL=postgresql://... ALLOW_DEMO_SEED=I_CONFIRM_EMPTY_DEMO_DATABASE node scripts/seed-demo-data.mjs
 // =============================================================================
 import pg from "pg";
 import bcrypt from "bcryptjs";
@@ -22,24 +22,53 @@ const DEMO_PASSWORD = "demo1234";
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS ?? 12);
 
 async function main() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    console.error("DATABASE_URL não definida.");
+  const connectionString = process.env.DEMO_SEED_DATABASE_URL;
+  if (!connectionString || process.env.ALLOW_DEMO_SEED !== "I_CONFIRM_EMPTY_DEMO_DATABASE") {
+    console.error("Defina DEMO_SEED_DATABASE_URL e confirme explicitamente uma base vazia de demonstração.");
+    process.exit(1);
+  }
+  if (process.env.NODE_ENV === "production") {
+    console.error("O seed de demonstração é bloqueado em NODE_ENV=production.");
     process.exit(1);
   }
 
   const client = new pg.Client({ connectionString });
   await client.connect();
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, SALT_ROUNDS);
 
   try {
     await client.query("BEGIN");
+    const databaseResult = await client.query(`
+      SELECT current_database() AS database_name
+    `);
+    if (!/(demo|test)/i.test(databaseResult.rows[0]?.database_name ?? "")) {
+      throw new Error("O nome do banco não indica ambiente de demonstração/teste.");
+    }
 
-    // Este script roda com o role administrativo da connection string
-    // (deve ter BYPASSRLS — ex: o próprio superuser do banco em ambiente
-    // de seed, NUNCA o role mil_app em produção) precisamente porque
-    // está inserindo o PRIMEIRO usuário do firm, antes de existir qualquer
-    // sessão autenticada que pudesse fornecer app.current_firm_id.
+    await client.query("SET LOCAL ROLE mil_platform_admin");
+    const roleResult = await client.query(`
+      SELECT current_user, rolsuper, rolbypassrls
+      FROM pg_roles
+      WHERE rolname = current_user
+    `);
+    const role = roleResult.rows[0];
+    if (role?.current_user !== "mil_platform_admin" || role.rolsuper || !role.rolbypassrls) {
+      throw new Error("A conexão não assumiu a role administrativa esperada.");
+    }
+
+    const existingData = await client.query(`
+      SELECT
+        EXISTS (SELECT 1 FROM firms LIMIT 1)
+        OR EXISTS (SELECT 1 FROM companies LIMIT 1)
+        OR EXISTS (SELECT 1 FROM users LIMIT 1) AS has_data
+    `);
+    if (existingData.rows[0]?.has_data) {
+      throw new Error("Seed recusado: firms, companies ou users já contêm dados.");
+    }
+
+    const passwordHash = await bcrypt.hash(DEMO_PASSWORD, SALT_ROUNDS);
+
+    // O seed só pode operar com a role administrativa e após confirmar uma
+    // base explicitamente identificada como demo/teste e sem dados de negócio.
 
     const firmResult = await client.query(
       `INSERT INTO firms (name, trade_name, cnpj, status, email, trial_ends_at)
