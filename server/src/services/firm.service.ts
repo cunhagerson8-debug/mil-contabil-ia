@@ -7,6 +7,7 @@ import {
   createFirm,
   findFirmByCnpj,
   findFirmById,
+  findFirmIdentity,
   listFirms,
   softDeleteFirm,
   updateFirm,
@@ -15,6 +16,7 @@ import {
 } from "../repositories/firm.repository.js";
 import { withPlatformReadOnlyContext } from "../db/withTenantContext.js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../utils/errors.js";
+import { toFirmIdentityDto } from "../utils/firm-identity.js";
 import type { CreateAdminFirmInput, UpdateAdminFirmInput } from "../validators/firm.validators.js";
 
 function normalizeCnpj(cnpj: string): string {
@@ -48,6 +50,19 @@ function normalizeAndValidateCnpj(cnpj: string): string {
 }
 
 export const firmService = {
+  async getMyIdentity(ctx: TenantContext) {
+    if (!ctx.firmId || ctx.role === "platform_admin") {
+      throw new ForbiddenError("A identidade de escritório não está disponível para este perfil.");
+    }
+
+    const firmId = ctx.firmId;
+    return withTenantContext(ctx, async (client) => {
+      const identity = await findFirmIdentity(client, firmId);
+      if (!identity) throw new NotFoundError("Escritório", "atual");
+      return toFirmIdentityDto(identity, firmId);
+    });
+  },
+
   async listForPlatformAdmin(ctx: TenantContext) {
     assertPlatformAdmin(ctx);
     return withPlatformReadOnlyContext((client) => listFirms(client));

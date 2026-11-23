@@ -26,6 +26,13 @@ interface InviteEmailData {
   expiresAt: Date;
 }
 
+interface PasswordResetEmailData {
+  to: string;
+  fullName: string;
+  token: string;
+  expiresAt: Date;
+}
+
 function renderInviteEmail({ fullName, token, expiresAt }: InviteEmailData) {
   const url = buildInviteUrl(token);
   const name = escapeHtml(fullName);
@@ -64,6 +71,55 @@ function renderInviteEmail({ fullName, token, expiresAt }: InviteEmailData) {
     `Aceite o convite: ${url}`,
     "",
     `Este convite é válido até ${expires} (horário de Brasília). Após esse prazo, solicite um novo convite.`,
+  ].join("\n");
+
+  return { html, text };
+}
+
+function buildPasswordResetUrl(token: string): string {
+  return `${APP_BASE_URL}/#/redefinir-senha?token=${encodeURIComponent(token)}`;
+}
+
+function renderPasswordResetEmail({ fullName, token, expiresAt }: PasswordResetEmailData) {
+  const url = buildPasswordResetUrl(token);
+  const name = escapeHtml(fullName);
+  const expires = expiresAt.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+
+  const html = `<!doctype html>
+<html lang="pt-BR">
+<body style="margin:0;padding:24px;background:#f4f6f8;font-family:Arial,Helvetica,sans-serif;color:#1f2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr><td align="center">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;padding:32px;">
+        <tr><td>
+          <h1 style="margin:0 0 16px;font-size:22px;color:#0f172a;">MIL Contábil IA</h1>
+          <p style="margin:0 0 12px;font-size:15px;line-height:1.5;">Olá, ${name}!</p>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.5;">Recebemos uma solicitação para redefinir a senha da sua conta.</p>
+          <p style="margin:0 0 24px;"><a href="${url}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:bold;font-size:15px;">Cadastrar nova senha</a></p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Este link expira em 30 minutos (até ${expires}, horário de Brasília) e só pode ser usado uma vez.</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;word-break:break-all;">Se o botão não funcionar, copie e cole este link no navegador:<br>${url}</p>
+          <p style="margin:0;font-size:13px;color:#6b7280;">Se você não solicitou a redefinição, ignore este e-mail. Sua senha permanecerá inalterada.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [
+    "MIL Contábil IA",
+    "",
+    `Olá, ${fullName}!`,
+    "Recebemos uma solicitação para redefinir a senha da sua conta.",
+    "",
+    `Cadastre uma nova senha: ${url}`,
+    `Este link expira em 30 minutos (até ${expires}, horário de Brasília) e só pode ser usado uma vez.`,
+    "",
+    "Se você não solicitou a redefinição, ignore este e-mail. Sua senha permanecerá inalterada.",
   ].join("\n");
 
   return { html, text };
@@ -115,6 +171,16 @@ export const emailService = {
     await sendEmail({
       to: data.to,
       subject: "Você foi convidado para a MIL Contábil IA",
+      html,
+      text,
+    });
+  },
+
+  async sendPasswordResetEmail(data: PasswordResetEmailData): Promise<void> {
+    const { html, text } = renderPasswordResetEmail(data);
+    await sendEmail({
+      to: data.to,
+      subject: "Redefinição de senha da MIL Contábil IA",
       html,
       text,
     });

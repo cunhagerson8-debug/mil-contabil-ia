@@ -17,6 +17,8 @@ import {
 import {
   NotFoundError,
   ConflictError,
+  ForbiddenError,
+  ValidationError,
 } from "../utils/errors.js";
 
 export interface EmployeeListFilters {
@@ -63,6 +65,10 @@ export const employeeService = {
     filters: EmployeeListFilters = {}
   ) {
     return withTenantContext(ctx, async (client) => {
+      if (!isStaff(ctx) && !(await employeeRepository.hasAnyHrPermission(client, "employee.read"))) {
+        throw new ForbiddenError("Permissão de leitura de RH necessária.");
+      }
+
       const dbFilters: EmployeeFilters = {
         companyId: filters.companyId,
         status: filters.status,
@@ -70,6 +76,18 @@ export const employeeService = {
       };
 
       return employeeRepository.findAll(client, dbFilters);
+    });
+  },
+
+  async listDepartments(
+    ctx: TenantContext,
+    companyId: string
+  ) {
+    return withTenantContext(ctx, async (client) => {
+      if (!(await employeeRepository.hasHrPermission(client, companyId, "employee.read"))) {
+        throw new ForbiddenError("Permissão de leitura de RH necessária para esta empresa.");
+      }
+      return employeeRepository.findDepartments(client, companyId);
     });
   },
 
@@ -98,15 +116,19 @@ export const employeeService = {
     ctx: TenantContext,
     input: EmployeeCreateInput
   ) {
-    if (!ctx.firmId) {
+    const firmId = ctx.firmId;
+    if (!firmId) {
       throw new ConflictError(
         "Usuário sem escritório associado não pode cadastrar colaboradores."
       );
     }
 
     return withTenantContext(ctx, async (client) => {
+      if (!(await employeeRepository.hasHrPermission(client, input.companyId, "employee.manage"))) {
+        throw new ForbiddenError("Permissão de gestão de RH necessária para esta empresa.");
+      }
       const data: EmployeeCreateRow = {
-        firmId: ctx.firmId!,
+        firmId,
         companyId: input.companyId,
         departmentId: input.departmentId ?? null,
         name: input.name,
@@ -131,6 +153,13 @@ export const employeeService = {
     employeeId: string,
     input: EmployeeUpdateInput
   ) {
+    if (
+      ctx.role !== "firm_owner"
+      && (input.companyId !== undefined || input.departmentId !== undefined)
+    ) {
+      throw new ForbiddenError("Somente firm_owner pode alterar os vínculos do colaborador.");
+    }
+
     return withTenantContext(ctx, async (client) => {
       const existing = await employeeRepository.findById(
         client,
@@ -144,9 +173,34 @@ export const employeeService = {
         );
       }
 
+      if (!(await employeeRepository.hasHrPermission(client, existing.company_id, "employee.manage"))) {
+        throw new ForbiddenError("Permissão de gestão de RH necessária para esta empresa.");
+      }
+
+      if (
+        input.status !== undefined
+        || input.terminationDate !== undefined
+        || input.admissionDate !== undefined
+      ) {
+        const nextStatus = input.status ?? existing.status;
+        const nextTerminationDate = input.terminationDate !== undefined
+          ? input.terminationDate
+          : existing.termination_date;
+        const nextAdmissionDate = input.admissionDate ?? existing.admission_date;
+        if (nextStatus === "terminated" && !nextTerminationDate) {
+          throw new ValidationError("Informe a data de desligamento.");
+        }
+        if (nextStatus !== "terminated" && nextTerminationDate) {
+          throw new ValidationError("Remova a data de desligamento para esta situação.");
+        }
+        if (nextTerminationDate && nextTerminationDate < nextAdmissionDate) {
+          throw new ValidationError("A data de desligamento não pode ser anterior à admissão.");
+        }
+      }
+
       const data: EmployeeUpdateRow = {
-        companyId: input.companyId,
-        departmentId: input.departmentId,
+        companyId: ctx.role === "firm_owner" ? input.companyId : undefined,
+        departmentId: ctx.role === "firm_owner" ? input.departmentId : undefined,
         name: input.name,
         cpf: input.cpf,
         email: input.email,
@@ -154,7 +208,9 @@ export const employeeService = {
         jobTitle: input.jobTitle,
         registration: input.registration,
         admissionDate: input.admissionDate,
-        terminationDate: input.terminationDate,
+        terminationDate: input.status && input.status !== "terminated"
+          ? null
+          : input.terminationDate,
         salary: input.salary,
         employmentType: input.employmentType,
         status: input.status,
@@ -181,6 +237,10 @@ export const employeeService = {
     ctx: TenantContext,
     employeeId: string
   ) {
+    if (ctx.role !== "firm_owner") {
+      throw new ForbiddenError("Somente firm_owner pode remover um colaborador.");
+    }
+
     return withTenantContext(ctx, async (client) => {
       const existing = await employeeRepository.findById(
         client,
@@ -206,3 +266,7 @@ export const employeeService = {
     });
   },
 };
+
+function isStaff(ctx: TenantContext): boolean {
+  return ctx.role === "firm_owner" || ctx.role === "accountant";
+}

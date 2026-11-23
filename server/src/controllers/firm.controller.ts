@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { firmService } from "../services/firm.service.js";
 
 export async function createFirmController(
@@ -34,6 +34,19 @@ export async function createFirmController(
           ? error.message
           : "Não foi possível criar o escritório.",
     });
+  }
+}
+
+export async function getMyFirmIdentityController(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const identity = await firmService.getMyIdentity(req.tenantContext!);
+    res.json({ identity });
+  } catch (error) {
+    next(error);
   }
 }
 

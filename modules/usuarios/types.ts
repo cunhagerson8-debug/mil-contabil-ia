@@ -4,6 +4,7 @@
 // =============================================================================
 
 import { UserRole, UserStatus } from "../auth/types";
+import type { HrCompanyPermissionGrant } from "../auth/types";
 
 export interface ManagedUser {
   id: string;
@@ -20,4 +21,5 @@ export interface ManagedUser {
   companyAccess?: string[];  // ids de empresas (company_manager / company_user, ou carteira restrita de accountant)
   canManageCompanies?: boolean;
   createdAt: string;
+  hrPermissions?: HrCompanyPermissionGrant[];
 }

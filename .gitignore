@@ -28,3 +28,8 @@ dist-ssr
 
 login.json
 objetos002.txt
+
+# Backups locais - nao publicar
+*.backup
+*.backup-*
+*.patch

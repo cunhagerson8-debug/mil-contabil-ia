@@ -15,4 +15,4 @@ taxObligationsRouter.get("/:id", taxObligationsController.getById);
 taxObligationsRouter.post("/", requireRole("platform_admin", "firm_owner", "accountant"), taxObligationsController.create);
 taxObligationsRouter.put("/:id", requireRole("platform_admin", "firm_owner", "accountant"), taxObligationsController.update);
 taxObligationsRouter.post("/:id/mark-paid", requireRole("platform_admin", "firm_owner", "accountant"), taxObligationsController.markPaid);
-taxObligationsRouter.delete("/:id", requireRole("platform_admin", "firm_owner", "accountant"), taxObligationsController.remove);
+taxObligationsRouter.delete("/:id", requireRole("platform_admin", "firm_owner"), taxObligationsController.remove);

@@ -1,4 +1,5 @@
 import { apiRequest } from "./apiClient.js";
+import type { HrCompanyPermissionGrant, HrPermission } from "../modules/auth/types";
 
 export interface ManagedUserDto {
   id: string;
@@ -12,7 +13,12 @@ export interface ManagedUserDto {
   avatarUrl?: string;
   mfaEnabled: boolean;
   lastLoginAt?: string;
-  companyAccess?: { userId: string; companyId: string; canManage: boolean }[];
+  companyAccess?: string[];
+  canManageCompanies?: boolean;
+  hrPermissions?: HrCompanyPermissionGrant[];
+  createdAt?: string;
+  invitedAt?: string;
+  invitedBy?: string;
 }
 
 export const usersApi = {
@@ -43,5 +49,13 @@ export const usersApi = {
   async updateRole(id: string, role: string) {
     const res = await apiRequest<{ user: ManagedUserDto }>(`/api/users/${id}/role`, { method: "PATCH", body: { role } });
     return res.user;
+  },
+
+  async replaceHrPermissions(userId: string, companyId: string, permissions: HrPermission[]) {
+    const res = await apiRequest<{ hrPermission: { userId: string; companyId: string; permissions: HrPermission[] } }>(
+      `/api/users/${userId}/companies/${companyId}/hr-permissions`,
+      { method: "PUT", body: { permissions } },
+    );
+    return res.hrPermission;
   },
 };

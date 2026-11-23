@@ -2,12 +2,17 @@
 // Ponto de entrada do servidor HTTP.
 // =============================================================================
 import { createApp } from "./app.js";
+import { startBackgroundJobsIfEnabled } from "./config/background-jobs.js";
 import { env } from "./config/env.js";
 import { closePool } from "./db/pool.js";
 import { startObligationStatusJob } from "./jobs/obligation-status.job.js";
+import { startPasswordResetJob } from "./jobs/password-reset.job.js";
 
 const app = createApp();
-startObligationStatusJob();
+startBackgroundJobsIfEnabled(env.disableBackgroundJobs, () => {
+  startObligationStatusJob();
+  startPasswordResetJob();
+});
 
 const server = app.listen(env.port, () => {
   // eslint-disable-next-line no-console

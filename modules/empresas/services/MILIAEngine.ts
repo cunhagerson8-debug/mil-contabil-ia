@@ -39,12 +39,6 @@ export function analyzeCompany(company: Company): DiagnosisResult {
     score -= 10;
   }
 
-  if (!company.certificadoDigitalValidade) {
-    problems.push("Certificado digital inexistente.");
-    recommendations.push("Emitir ou renovar o certificado digital.");
-    score -= 20;
-  }
-
   if (company.socios.length === 0) {
     problems.push("Nenhum sócio cadastrado.");
     recommendations.push("Cadastrar o quadro societário.");

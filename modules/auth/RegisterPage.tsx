@@ -4,6 +4,7 @@ import { useAuth } from "./AuthContext";
 import { RegisterInput } from "./types";
 
 interface RegisterPageProps {
+  onBackToHome: () => void;
   onBackToLogin: () => void;
 }
 
@@ -24,7 +25,7 @@ const initialForm: RegisterInput = {
   },
 };
 
-export default function RegisterPage({ onBackToLogin }: RegisterPageProps) {
+export default function RegisterPage({ onBackToHome, onBackToLogin }: RegisterPageProps) {
   const { register, isSubmitting, error, clearError } = useAuth();
   const [form, setForm] = useState<RegisterInput>(initialForm);
   const [showPassword, setShowPassword] = useState(false);
@@ -56,6 +57,14 @@ export default function RegisterPage({ onBackToLogin }: RegisterPageProps) {
             Cadastre seu escritório e crie o primeiro administrador.
           </p>
         </div>
+
+        <button
+          type="button"
+          onClick={onBackToHome}
+          className="mb-4 inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-bold text-blue-700 hover:text-blue-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          ← Voltar à página inicial
+        </button>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
           <button

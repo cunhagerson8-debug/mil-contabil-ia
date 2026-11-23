@@ -6,11 +6,13 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 
 process.env.DATABASE_URL = "postgres://test:test@localhost:5432/test";
+process.env.ADMIN_DATABASE_URL = "postgres://admin-test:admin-test@localhost:5432/test";
 process.env.JWT_SECRET = "test-secret";
+process.env.RLS_CONTEXT_SECRET = "rls-context-test-secret-0123456789abcdef";
 process.env.GEMINI_API_KEY = "test-gemini";
 process.env.RESEND_API_KEY = "re_test_key_not_real";
 
-const { pool } = await import("../src/db/pool.js");
+const { adminPool } = await import("../src/db/pool.js");
 const { firmOnboardingService } = await import("../src/services/firm.onboarding.service.js");
 const { onboardFirmSchema } = await import("../src/validators/firm.validators.js");
 
@@ -36,6 +38,24 @@ function makeClient() {
       allParams.push(...params);
       const s = sql.replace(/\s+/g, " ").trim();
       if (s === "BEGIN") { snapshot = [structuredClone(firms), structuredClone(users), structuredClone(invs)]; return { rows: [], rowCount: 0 }; }
+      if (s === "SET LOCAL ROLE mil_platform_admin") return { rows: [], rowCount: 0 };
+      if (s.startsWith("SELECT session_user AS session_user_name")) {
+        return {
+          rows: [{
+            session_user_name: "mil_platform_login",
+            session_can_login: true,
+            session_superuser: false,
+            session_bypassrls: false,
+            session_inherit: false,
+            session_has_unexpected_privileged_membership: false,
+            session_has_unexpected_membership: false,
+            effective_role: "mil_platform_admin",
+            rolsuper: false,
+            rolbypassrls: true,
+          }],
+          rowCount: 1,
+        };
+      }
       if (s === "COMMIT") { snapshot = null; return { rows: [], rowCount: 0 }; }
       if (s === "ROLLBACK") { if (snapshot) [firms, users, invs] = snapshot; return { rows: [], rowCount: 0 }; }
       if (s.startsWith("SELECT pg_advisory_xact_lock")) { lockKeys.push(params[0]); return { rows: [], rowCount: 0 }; }
@@ -88,7 +108,7 @@ function makeClient() {
   };
 }
 
-(pool as unknown as { connect: () => Promise<unknown> }).connect = async () => makeClient();
+(adminPool as unknown as { connect: () => Promise<unknown> }).connect = async () => makeClient();
 
 let fetchBodies: string[] = [];
 let fetchOk = true;
@@ -176,8 +196,8 @@ test("onboarding: CNPJ duplicado é bloqueado sem criar usuário/convite", async
 });
 
 test("onboarding: falha após criar o escritório faz rollback de tudo", async () => {
-  const realConnect = (pool as unknown as { connect: () => Promise<{ query: (s: string, p?: unknown[]) => Promise<unknown> }> }).connect;
-  (pool as unknown as { connect: () => Promise<unknown> }).connect = async () => {
+  const realConnect = (adminPool as unknown as { connect: () => Promise<{ query: (s: string, p?: unknown[]) => Promise<unknown> }> }).connect;
+  (adminPool as unknown as { connect: () => Promise<unknown> }).connect = async () => {
     const c = await realConnect();
     const q = c.query.bind(c);
     c.query = async (s: string, p?: unknown[]) => {
@@ -189,7 +209,7 @@ test("onboarding: falha após criar o escritório faz rollback de tudo", async (
   try {
     await errorOf(firmOnboardingService.onboard(ADMIN, onboardFirmSchema.parse(input)));
   } finally {
-    (pool as unknown as { connect: () => Promise<unknown> }).connect = realConnect;
+    (adminPool as unknown as { connect: () => Promise<unknown> }).connect = realConnect;
   }
   assert.equal(firms.length, 1);
   assert.equal(users.length, 1);

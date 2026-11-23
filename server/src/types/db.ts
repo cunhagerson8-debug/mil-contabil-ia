@@ -105,6 +105,26 @@ export interface ClientHistoryRow {
   data: string;
 }
 
+export type CommercialLeadStatusDb = "new" | "contacting" | "qualified" | "converted" | "closed";
+export type CommercialLeadInterestDb = "software_subscription" | "accounting_services" | "both" | "undecided";
+
+export interface CommercialLeadRow {
+  id: string;
+  name: string;
+  whatsapp_e164: string;
+  email: string | null;
+  service_interest: CommercialLeadInterestDb;
+  voluntary_details: string | null;
+  consented_at: string;
+  consent_version: string;
+  status: CommercialLeadStatusDb;
+  source: "mila";
+  last_contacted_at: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // -----------------------------------------------------------------------------
 export type ObligationTypeDb =
   | "das" | "pgdas" | "dctfweb" | "efd_reinf" | "esocial" | "fgts_digital"
@@ -148,6 +168,7 @@ export interface UserRow {
   auth_provider: string;
   mfa_enabled: boolean;
   avatar_url: string | null;
+  session_version: number;
   last_login_at: string | null;
   created_at: string;
 }
@@ -169,4 +190,17 @@ export interface UserCompanyAccessRow {
   user_id: string;
   company_id: string;
   can_manage: boolean;
+}
+
+export interface UserCompanyHrPermissionRow {
+  user_id: string;
+  company_id: string;
+  can_read_employees: boolean;
+  can_read_sensitive_data: boolean;
+  can_read_documents: boolean;
+  can_manage_employees: boolean;
+  can_manage_documents: boolean;
+  granted_by: string;
+  granted_at: string;
+  updated_at: string;
 }

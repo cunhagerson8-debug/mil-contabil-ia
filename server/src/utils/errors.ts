@@ -38,3 +38,10 @@ export class ForbiddenError extends Error {
     this.name = "ForbiddenError";
   }
 }
+
+export class ServiceUnavailableError extends Error {
+  constructor(message = "Serviço temporariamente indisponível.") {
+    super(message);
+    this.name = "ServiceUnavailableError";
+  }
+}

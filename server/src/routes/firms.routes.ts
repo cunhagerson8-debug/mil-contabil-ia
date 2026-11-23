@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createFirmController,
   deleteFirmController,
+  getMyFirmIdentityController,
   getFirmController,
   listFirmsController,
   updateFirmController,
@@ -15,6 +16,8 @@ router.use(requireAuth);
 router.post("/", createFirmController);
 
 router.get("/", listFirmsController);
+
+router.get("/identity", getMyFirmIdentityController);
 
 router.get("/:firmId", getFirmController);
 

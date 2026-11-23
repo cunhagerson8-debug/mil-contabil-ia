@@ -21,6 +21,9 @@ import { milAuditorRoutes } from "./routes/mil-auditor.routes.js";
 import { subscriptionsRouter } from "./routes/subscriptions.routes.js";
 import { aiChatRouter } from "./routes/ai-chat.routes.js";
 import { adminFirmsRouter } from "./routes/admin-firms.routes.js";
+import { milaRouter } from "./routes/mila.routes.js";
+import { publicCommercialLeadRouter } from "./routes/publicCommercialLead.routes.js";
+import { adminCommercialLeadRouter } from "./routes/adminCommercialLead.routes.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,6 +53,9 @@ export function createApp(): Application {
   app.use("/api/auditor", milAuditorRoutes);
   app.use("/api/subscriptions", subscriptionsRouter);
   app.use("/api/ai", aiChatRouter);
+  app.use("/api/public/mila", milaRouter);
+  app.use("/api/public/mila/leads", publicCommercialLeadRouter);
+  app.use("/api/admin/commercial-leads", adminCommercialLeadRouter);
   const frontendDist = fileURLToPath(new URL("../../dist", import.meta.url));
 
 app.use(express.static(frontendDist));

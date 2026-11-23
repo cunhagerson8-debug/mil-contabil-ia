@@ -5,7 +5,7 @@
 // registrando quais já foram aplicadas.
 //
 // Uso:
-//   DATABASE_URL=postgresql://... node scripts/run-migrations.mjs
+//   MIGRATIONS_DATABASE_URL=postgresql://... node scripts/run-migrations.mjs
 // ============================================================================
 
 import { readdirSync, readFileSync } from "fs";
@@ -20,11 +20,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = resolve(__dirname, "../../database/migrations");
 
 async function main() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.MIGRATIONS_DATABASE_URL;
 
   if (!connectionString) {
     console.error(
-      "DATABASE_URL não definida. Configure server/.env a partir de .env.example."
+      "MIGRATIONS_DATABASE_URL não definida. Use uma conexão de migração aprovada; DATABASE_URL operacional não é aceita."
     );
     process.exit(1);
   }
@@ -67,6 +67,17 @@ async function main() {
       await client.query("BEGIN");
 
       try {
+        if (file === "019_signed_rls_context.sql") {
+          const contextSecret = process.env.RLS_CONTEXT_SECRET;
+          if (!contextSecret || Buffer.byteLength(contextSecret, "utf8") < 32) {
+            throw new Error("RLS_CONTEXT_SECRET ausente ou menor que 32 bytes.");
+          }
+          await client.query(
+            "SELECT set_config('app.rls_context_migration_secret', $1, true)",
+            [contextSecret],
+          );
+        }
+
         await client.query(sql);
 
         await client.query(

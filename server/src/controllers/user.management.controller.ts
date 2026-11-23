@@ -1,6 +1,7 @@
 ﻿import { Request, Response, NextFunction } from "express";
 import { userManagementService } from "../services/user.management.service.js";
 import { z } from "zod";
+import { HR_PERMISSIONS } from "../types/hr-permissions.js";
 
 const listQuerySchema = z.object({
   role: z.string().optional(),
@@ -18,6 +19,32 @@ const inviteSchema = z.object({
 
 const updateStatusSchema = z.object({ status: z.string() });
 const updateRoleSchema = z.object({ role: z.string() });
+const updateHrPermissionsSchema = z.object({
+  permissions: z.array(z.enum(HR_PERMISSIONS)).max(HR_PERMISSIONS.length),
+}).strict().superRefine(({ permissions }, context) => {
+  if (new Set(permissions).size !== permissions.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["permissions"],
+      message: "Permissões duplicadas.",
+    });
+  }
+  const set = new Set(permissions);
+  if (
+    (set.has("employee.sensitive.read") && !set.has("employee.read"))
+    || (set.has("employee.documents.read") && !set.has("employee.read"))
+    || (set.has("employee.manage")
+      && (!set.has("employee.read") || !set.has("employee.sensitive.read")))
+    || (set.has("employee.documents.manage")
+      && (!set.has("employee.read") || !set.has("employee.documents.read")))
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["permissions"],
+      message: "Permissões de gestão ou dados específicos exigem a leitura correspondente.",
+    });
+  }
+});
 
 export const userManagementController = {
   async list(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -56,6 +83,21 @@ export const userManagementController = {
       const { role } = updateRoleSchema.parse(req.body);
       const user = await userManagementService.updateRole(req.tenantContext!, req.params.id, role);
       res.json({ user });
+    } catch (err) { next(err); }
+  },
+
+  async replaceHrPermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = z.string().uuid().parse(req.params.id);
+      const companyId = z.string().uuid().parse(req.params.companyId);
+      const { permissions } = updateHrPermissionsSchema.parse(req.body);
+      const result = await userManagementService.replaceHrPermissions(
+        req.tenantContext!,
+        userId,
+        companyId,
+        permissions,
+      );
+      res.json({ hrPermission: result });
     } catch (err) { next(err); }
   },
 };

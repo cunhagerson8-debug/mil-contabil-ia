@@ -1,5 +1,10 @@
 import { PoolClient } from "pg";
-import { ManagedUserRow, UserCompanyAccessRow } from "../types/db.js";
+import {
+  ManagedUserRow,
+  UserCompanyAccessRow,
+  UserCompanyHrPermissionRow,
+} from "../types/db.js";
+import type { HrPermission } from "../types/hr-permissions.js";
 
 const MANAGED_USER_SELECT = `
   SELECT u.id, u.firm_id, u.role, u.status, u.full_name, u.email, u.phone,
@@ -65,6 +70,66 @@ export const userManagementRepository = {
       [userId]
     );
     return result.rows;
+  },
+
+  async findHrPermissions(client: PoolClient, userId: string): Promise<UserCompanyHrPermissionRow[]> {
+    const result = await client.query<UserCompanyHrPermissionRow>(
+      `SELECT user_id, company_id, can_read_employees, can_read_sensitive_data,
+              can_read_documents, can_manage_employees, can_manage_documents,
+              granted_by, granted_at, updated_at
+       FROM user_company_hr_permissions
+       WHERE user_id = $1
+       ORDER BY company_id`,
+      [userId]
+    );
+    return result.rows;
+  },
+
+  async replaceHrPermissions(
+    client: PoolClient,
+    data: {
+      userId: string;
+      companyId: string;
+      grantedBy: string;
+      permissions: HrPermission[];
+    },
+  ): Promise<void> {
+    const granted = new Set(data.permissions);
+    const values = [
+      data.userId,
+      data.companyId,
+      grantedByPermission(granted, "employee.read"),
+      grantedByPermission(granted, "employee.sensitive.read"),
+      grantedByPermission(granted, "employee.documents.read"),
+      grantedByPermission(granted, "employee.manage"),
+      grantedByPermission(granted, "employee.documents.manage"),
+      data.grantedBy,
+    ];
+
+    if (data.permissions.length === 0) {
+      await client.query(
+        `DELETE FROM user_company_hr_permissions WHERE user_id = $1 AND company_id = $2`,
+        values.slice(0, 2),
+      );
+      return;
+    }
+
+    await client.query(
+      `INSERT INTO user_company_hr_permissions (
+         user_id, company_id, can_read_employees, can_read_sensitive_data,
+         can_read_documents, can_manage_employees, can_manage_documents, granted_by
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (user_id, company_id) DO UPDATE SET
+         can_read_employees = EXCLUDED.can_read_employees,
+         can_read_sensitive_data = EXCLUDED.can_read_sensitive_data,
+         can_read_documents = EXCLUDED.can_read_documents,
+         can_manage_employees = EXCLUDED.can_manage_employees,
+         can_manage_documents = EXCLUDED.can_manage_documents,
+         granted_by = EXCLUDED.granted_by,
+         updated_at = now()`,
+      values,
+    );
   },
 
   async revokePendingInvitations(client: PoolClient, userId: string): Promise<void> {
@@ -149,3 +214,10 @@ export const userManagementRepository = {
     return user;
   },
 };
+
+function grantedByPermission(
+  permissions: Set<HrPermission>,
+  permission: HrPermission,
+): boolean {
+  return permissions.has(permission);
+}

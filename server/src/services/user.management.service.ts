@@ -7,6 +7,7 @@ import { toManagedUserDto } from "../mappers/user.mapper.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../utils/errors.js";
 import { env } from "../config/env.js";
 import { emailService } from "./email.service.js";
+import type { HrPermission } from "../types/hr-permissions.js";
 
 // Nesta etapa, platform_admin só pode convidar diretamente para o comando do
 // escritório; company_manager/company_user exigem vínculo de empresa e serão
@@ -26,7 +27,7 @@ export const userManagementService = {
   async list(ctx: TenantContext, filters: UserFilters) {
     return withTenantContext(ctx, async (client) => {
       const users = await userManagementRepository.findAll(client, filters);
-      return users.map(toManagedUserDto);
+      return users.map((user) => toManagedUserDto(user));
     });
   },
 
@@ -35,10 +36,54 @@ export const userManagementService = {
       const user = await userManagementRepository.findById(client, id);
       if (!user) throw new NotFoundError("Usuário", id);
       const access = await userManagementRepository.findCompanyAccess(client, id);
+      const hrPermissions = await userManagementRepository.findHrPermissions(client, id);
       return {
-        ...toManagedUserDto(user),
+        ...toManagedUserDto(user, hrPermissions),
         companyAccess: access.map((item) => item.company_id),
         canManageCompanies: access.length > 0 ? access.some((item) => item.can_manage) : undefined,
+      };
+    });
+  },
+
+  async replaceHrPermissions(
+    ctx: TenantContext,
+    userId: string,
+    companyId: string,
+    permissions: HrPermission[],
+  ) {
+    if (ctx.role !== "firm_owner" || !ctx.firmId) {
+      throw new ForbiddenError("Somente o firm_owner pode administrar permissões de RH.");
+    }
+
+    return withTenantContext(ctx, async (client) => {
+      const user = await userManagementRepository.findById(client, userId);
+      if (
+        !user
+        || user.firm_id !== ctx.firmId
+        || !["company_manager", "company_user"].includes(user.role)
+      ) {
+        throw new NotFoundError("Usuário do portal", userId);
+      }
+
+      const companyResult = await client.query<{ id: string }>(
+        `SELECT id FROM companies WHERE id = $1 AND firm_id = $2`,
+        [companyId, ctx.firmId],
+      );
+      if (!companyResult.rows[0]) {
+        throw new NotFoundError("Empresa", companyId);
+      }
+
+      await userManagementRepository.replaceHrPermissions(client, {
+        userId,
+        companyId,
+        grantedBy: ctx.userId,
+        permissions,
+      });
+
+      return {
+        userId,
+        companyId,
+        permissions,
       };
     });
   },

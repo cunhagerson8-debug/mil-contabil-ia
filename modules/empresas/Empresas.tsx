@@ -4,6 +4,7 @@ import {
   Mail, Phone, MapPin, Users, Loader2, AlertCircle, Pencil, Trash2, RotateCcw,
 } from "lucide-react";
 import { Company, StatusEmpresa, RegimeTributario } from "./types";
+import { analyzeCertificate } from "./services/CertificateAnalyzer";
 import { companiesApi, CompanyCreateInput } from "../../services/companiesApi";
 import { firmsApi, Firm } from "../../services/firmsApi";
 import { ApiError } from "../../services/apiClient";
@@ -26,12 +27,27 @@ const regimeStyles: Record<string, string> = {
 
 const REGIME_OPTIONS: RegimeTributario[] = ["Simples Nacional", "Lucro Presumido", "Lucro Real", "MEI"];
 
-function certificadoStatus(dateStr?: string) {
-  if (!dateStr) return null;
-  const days = Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000);
-  if (days < 0) return { label: "Certificado vencido", tone: "text-red-600", icon: ShieldAlert };
-  if (days <= 30) return { label: `Certificado vence em ${days}d`, tone: "text-amber-600", icon: ShieldAlert };
-  return { label: "Certificado A1 válido", tone: "text-emerald-600", icon: ShieldCheck };
+function certificadoStatus(company: Company) {
+  const analysis = analyzeCertificate(company);
+
+  switch (analysis.status) {
+    case "Não cadastrado":
+      return { label: analysis.status, tone: "text-slate-500", icon: ShieldAlert };
+    case "Dados incompletos":
+      return { label: analysis.status, tone: "text-amber-600", icon: AlertCircle };
+    case "Válido":
+      return { label: "Certificado válido", tone: "text-emerald-600", icon: ShieldCheck };
+    case "Próximo do vencimento":
+      return {
+        label: `Certificado vence em ${analysis.daysRemaining}d`,
+        tone: "text-amber-600",
+        icon: ShieldAlert,
+      };
+    case "Vencido":
+      return { label: analysis.status, tone: "text-red-600", icon: ShieldAlert };
+    case "Revogado":
+      return { label: analysis.status, tone: "text-red-600", icon: ShieldAlert };
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -194,7 +210,7 @@ function CompanyFormModal({
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">CNAE</label>
               <input required value={form.cnae} onChange={(e) => update("cnae", e.target.value)} placeholder="0000-0/00"
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40" />
-            </div>setSelected
+            </div>
             <div>
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Data de Abertura</label>
               <input required type="date" value={form.dataAbertura} onChange={(e) => update("dataAbertura", e.target.value)}
@@ -407,7 +423,7 @@ export default function Empresas() {
       {!loading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((company) => {
-            const cert = certificadoStatus(company.certificadoDigitalValidade);
+            const cert = certificadoStatus(company);
             return (
               <button
                 key={company.id}

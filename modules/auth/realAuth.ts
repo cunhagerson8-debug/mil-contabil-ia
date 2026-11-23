@@ -42,9 +42,9 @@ export async function realRegister(payload: RegisterInput): Promise<AuthSession>
   }
 }
 
-export async function realRequestPasswordReset(email: string): Promise<{ sent: boolean }> {
+export async function realRequestPasswordReset(email: string): Promise<{ accepted: boolean }> {
   try {
-    return await apiRequest<{ sent: boolean }>("/api/auth/forgot-password", {
+    return await apiRequest<{ accepted: boolean }>("/api/auth/forgot-password", {
       method: "POST",
       body: { email },
     });
@@ -53,6 +53,20 @@ export async function realRequestPasswordReset(email: string): Promise<{ sent: b
       throw new AuthError(err.message);
     }
     throw new AuthError("Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.");
+  }
+}
+
+export async function realResetPassword(token: string, password: string): Promise<void> {
+  try {
+    await apiRequest<{ reset: boolean }>("/api/auth/reset-password", {
+      method: "POST",
+      body: { token, password },
+    });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new AuthError(err.message);
+    }
+    throw new AuthError("Não foi possível redefinir a senha agora. Tente novamente mais tarde.");
   }
 }
 
